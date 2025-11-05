@@ -609,24 +609,31 @@ function editarGasto(fila) {
     cambiarTab('add');
 
     // Rellenar el formulario
-    console.log('Editando gasto:', gasto);
+    console.log('=== EDITANDO GASTO ===');
+    console.log('Datos del gasto:', gasto);
 
-    // Convertir fecha de DD/MM/YYYY a YYYY-MM-DD para el datepicker
+    // Convertir fecha de DD/MM/YYYY o formato Google Sheets a YYYY-MM-DD para el datepicker
     if (gasto.fecha && gasto.fecha.trim() !== '') {
+        console.log('Fecha original:', gasto.fecha);
         const fechaISO = formatearFechaISO(gasto.fecha);
-        console.log('Asignando fecha al datepicker:', fechaISO);
+        console.log('Fecha convertida a ISO:', fechaISO);
 
-        if (fechaISO) {
-            fechaInput.value = fechaISO;
-            // Forzar actualización del datepicker
-            fechaInput.dispatchEvent(new Event('change', { bubbles: true }));
+        if (fechaISO && fechaISO.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            // Asegurarse de que el input esté listo
+            setTimeout(() => {
+                fechaInput.value = fechaISO;
+                console.log('Fecha asignada al input. Valor actual:', fechaInput.value);
+                // Forzar actualización visual
+                fechaInput.dispatchEvent(new Event('input', { bubbles: true }));
+                fechaInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }, 0);
         } else {
-            console.warn('No se pudo convertir la fecha:', gasto.fecha);
-            fechaInput.value = '';
+            console.warn('❌ Formato de fecha inválido después de conversión:', fechaISO);
+            fechaInput.value = getFechaHoyISO();
         }
     } else {
-        console.warn('Fecha vacía en el gasto');
-        fechaInput.value = '';
+        console.warn('Fecha vacía en el gasto, usando fecha de hoy');
+        fechaInput.value = getFechaHoyISO();
     }
 
     // Parsear el importe correctamente
@@ -652,7 +659,8 @@ function editarGasto(fila) {
     setTimeout(() => {
         importeInput.focus();
         importeInput.select();
-    }, 100);
+        console.log('=== FORMULARIO LISTO PARA EDITAR ===');
+    }, 150);
 }
 
 async function enviarAGoogleSheets(datos, fila = null) {
@@ -945,42 +953,163 @@ searchInput.addEventListener('input', function() {
     renderizarListaGastos(termino);
 });
 
+// ==================== AUTENTICACIÓN ====================
+
+let isSignedIn = false;
+let gapiInited = false;
+let gisInited = false;
+let tokenClient;
+
+// Inicializar cliente de Google Identity Services
+function gapiLoaded() {
+    gapi.load('client', initializeGapiClient);
+}
+
+async function initializeGapiClient() {
+    try {
+        await gapi.client.init({
+            apiKey: CONFIG.API_KEY,
+            discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+        });
+        gapiInited = true;
+        console.log('✅ GAPI client inicializado');
+        maybeEnableButtons();
+    } catch (error) {
+        console.error('❌ Error al inicializar GAPI client:', error);
+        mostrarErrorMessage('Error al inicializar Google API. Verifica tu configuración.');
+    }
+}
+
+function gisLoaded() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CONFIG.CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/spreadsheets',
+        callback: '', // se definirá más tarde
+    });
+    gisInited = true;
+    console.log('✅ GIS client inicializado');
+    maybeEnableButtons();
+}
+
+function maybeEnableButtons() {
+    if (gapiInited && gisInited) {
+        console.log('✅ Ambos clientes inicializados correctamente');
+
+        // Verificar si ya está autenticado
+        const token = gapi.client.getToken();
+        if (token !== null) {
+            isSignedIn = true;
+            onSignInSuccess();
+        } else {
+            mostrarPantallaLogin();
+        }
+    }
+}
+
+function mostrarPantallaLogin() {
+    const loginHTML = `
+        <div class="login-container">
+            <div class="login-card">
+                <h2>🔐 Autenticación Requerida</h2>
+                <p>Para usar esta aplicación necesitas autenticarte con tu cuenta de Google.</p>
+                <button id="btnAutorizar" class="btn btn-primary">
+                    <span class="btn-icon">🔑</span>
+                    Autorizar con Google
+                </button>
+                <p class="help-text">
+                    La aplicación necesita permiso para leer y escribir en tu Google Sheet "Economía Familia"
+                </p>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('afterbegin', loginHTML);
+    document.getElementById('btnAutorizar').addEventListener('click', handleAuthClick);
+
+    // Ocultar el contenido principal
+    document.querySelector('.container').style.display = 'none';
+}
+
+function ocultarPantallaLogin() {
+    const loginContainer = document.querySelector('.login-container');
+    if (loginContainer) {
+        loginContainer.remove();
+    }
+    document.querySelector('.container').style.display = 'block';
+}
+
+function handleAuthClick() {
+    tokenClient.callback = async (response) => {
+        if (response.error !== undefined) {
+            console.error('Error de autenticación:', response);
+            mostrarErrorMessage('Error al autenticar. Intenta de nuevo.');
+            throw response;
+        }
+        console.log('✅ Autenticación exitosa');
+        isSignedIn = true;
+        ocultarPantallaLogin();
+        await onSignInSuccess();
+    };
+
+    if (gapi.client.getToken() === null) {
+        // Solicitar token de acceso
+        tokenClient.requestAccessToken({prompt: 'consent'});
+    } else {
+        // Ya hay token, solo solicitar uno nuevo
+        tokenClient.requestAccessToken({prompt: ''});
+    }
+}
+
+function handleSignoutClick() {
+    const token = gapi.client.getToken();
+    if (token !== null) {
+        google.accounts.oauth2.revoke(token.access_token);
+        gapi.client.setToken('');
+        isSignedIn = false;
+        mostrarPantallaLogin();
+    }
+}
+
+async function onSignInSuccess() {
+    try {
+        // Inicializar la hoja del mes actual
+        await inicializarHojaMesActual();
+
+        // Cargar gastos inicial para actualizar el contador
+        await cargarGastos();
+
+        // Volver a la tab de añadir después de cargar
+        cambiarTab('add');
+    } catch (error) {
+        console.error('❌ Error al inicializar después del login:', error);
+        mostrarErrorMessage('Error al conectar con Google Sheets. Verifica que el spreadsheet existe.');
+    }
+}
+
 // ==================== INICIALIZACIÓN ====================
 
 function inicializarGoogleAPI() {
-    gapi.load('client', async () => {
-        try {
-            await gapi.client.init({
-                apiKey: CONFIG.API_KEY,
-                discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
-            });
-            console.log('✅ Google Sheets API inicializada correctamente');
+    // Cargar GAPI
+    const gapiScript = document.createElement('script');
+    gapiScript.src = 'https://apis.google.com/js/api.js';
+    gapiScript.onload = gapiLoaded;
+    document.head.appendChild(gapiScript);
 
-            // Inicializar la hoja del mes actual
-            await inicializarHojaMesActual();
-
-            // Cargar gastos inicial para actualizar el contador
-            cargarGastos().then(() => {
-                // Volver a la tab de añadir después de cargar
-                cambiarTab('add');
-            });
-        } catch (error) {
-            console.error('❌ Error al inicializar Google Sheets API:', error);
-            mostrarErrorMessage('Error al conectar con Google Sheets. Verifica tu API Key y configuración.');
-        }
-    });
+    // Cargar GIS (Google Identity Services)
+    const gisScript = document.createElement('script');
+    gisScript.src = 'https://accounts.google.com/gsi/client';
+    gisScript.onload = gisLoaded;
+    document.head.appendChild(gisScript);
 }
 
 // Cargar la API de Google cuando se carga la página
 window.addEventListener('load', () => {
-    // Cargar el cliente de Google API
-    const script = document.createElement('script');
-    script.src = 'https://apis.google.com/js/api.js';
-    script.onload = inicializarGoogleAPI;
-    document.head.appendChild(script);
+    inicializarGoogleAPI();
 
     // Foco inicial en el campo de importe (el más común)
     setTimeout(() => {
-        importeInput.focus();
+        if (isSignedIn) {
+            importeInput.focus();
+        }
     }, 500);
 });

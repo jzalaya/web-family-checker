@@ -66,18 +66,39 @@ Esta guía te ayudará a configurar la aplicación para que funcione con tu Goog
 2. Busca **"Google Sheets API"**
 3. Haz clic en **"Habilitar"**
 
-### 2.3 Crear una API Key
+### 2.3 Crear una API Key (Para lectura)
 
 1. Ve a **"APIs y servicios"** → **"Credenciales"**
 2. Haz clic en **"Crear credenciales"** → **"Clave de API"**
 3. Se creará tu API Key
 4. **IMPORTANTE**: Copia esta clave inmediatamente
 
-### 2.4 Configurar Restricciones de la API Key (Recomendado)
+### 2.4 Crear un OAuth 2.0 Client ID (⚠️ REQUERIDO para escritura)
 
-Para mayor seguridad:
+**IMPORTANTE**: Google Sheets API NO permite usar solo API Keys para operaciones de escritura. Debes configurar OAuth 2.0.
 
-1. Haz clic en tu API Key recién creada
+1. Ve a **"APIs y servicios"** → **"Credenciales"**
+2. Si es tu primera vez, configura la **"Pantalla de consentimiento OAuth"**:
+   - Tipo de usuario: **"Externo"** (o "Interno" si tienes Google Workspace)
+   - Nombre de la aplicación: "Registro de Gastos"
+   - Correo de asistencia: tu email
+   - Alcances: Agrega `https://www.googleapis.com/auth/spreadsheets`
+   - Guarda y continúa
+
+3. Vuelve a **"Credenciales"** → **"Crear credenciales"** → **"ID de cliente de OAuth 2.0"**
+4. Tipo de aplicación: **"Aplicación web"**
+5. Nombre: "Cliente Web Registro Gastos"
+6. **URIs de redireccionamiento autorizados** (IMPORTANTE):
+   - Para desarrollo local: `http://localhost:8000`
+   - Para producción: `https://tuusuario.github.io` (tu dominio de GitHub Pages)
+   - Ejemplo: `https://jzalaya.github.io`
+
+7. Haz clic en **"Crear"**
+8. Se mostrará tu **Client ID** → **Cópialo** (lo necesitarás para CONFIG.CLIENT_ID)
+
+### 2.5 Configurar Restricciones de la API Key (Opcional, para mayor seguridad)
+
+1. Haz clic en tu API Key
 2. En **"Restricciones de aplicación"**:
    - Selecciona **"Referentes HTTP"**
    - Añade tu dominio o `localhost` para desarrollo
@@ -113,7 +134,10 @@ Si vas a ejecutar la aplicación en tu computadora local:
        API_KEY: 'AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
 
        // Pega aquí el ID de tu Spreadsheet "Economía Familia"
-       SPREADSHEET_ID: 'ABC123xyz456...'
+       SPREADSHEET_ID: 'ABC123xyz456...',
+
+       // ⚠️ REQUERIDO: Pega aquí tu OAuth 2.0 Client ID
+       CLIENT_ID: '123456789-abcdefg.apps.googleusercontent.com'
    };
    ```
 
@@ -139,14 +163,21 @@ Si vas a desplegar la aplicación en GitHub Pages o en producción:
    - Name: `SPREADSHEET_ID`
    - Secret: El ID de tu Google Spreadsheet
 
+   **Secret 3:** ⚠️ NUEVO - REQUERIDO
+   - Name: `GOOGLE_CLIENT_ID`
+   - Secret: Tu OAuth 2.0 Client ID (termina en `.apps.googleusercontent.com`)
+
 5. Una vez configurados, cada vez que hagas push a la rama `main`, GitHub Actions generará automáticamente el archivo `config.js` con tus credenciales.
+
+⚠️ **IMPORTANTE**: Asegúrate de que en el OAuth 2.0 Client ID de Google Cloud Console, los **URIs de redireccionamiento autorizados** incluyen tu URL de GitHub Pages (ej: `https://tuusuario.github.io`).
 
 ### 3.3 Ejemplo Completo
 
 ```javascript
 const CONFIG = {
     API_KEY: 'AIzaSyDxK8j9FmN3QrT6vYzP1cW2hL5sN8bM4aR',
-    SPREADSHEET_ID: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
+    SPREADSHEET_ID: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+    CLIENT_ID: '123456789-abcdefghijklmnop.apps.googleusercontent.com'
 };
 ```
 
@@ -168,6 +199,15 @@ const CONFIG = {
 ---
 
 ## 🌐 Paso 5: Probar la Aplicación
+
+⚠️ **IMPORTANTE**: La aplicación ahora usa **OAuth 2.0** para autenticación. La primera vez que la abras:
+
+1. Verás una pantalla de login con un botón **"Autorizar con Google"**
+2. Haz clic en el botón
+3. Se abrirá una ventana de Google para autorizar la aplicación
+4. Selecciona tu cuenta de Google
+5. Acepta los permisos (la app necesita leer y escribir en Google Sheets)
+6. Serás redirigido de vuelta a la aplicación
 
 ### Opción A: Servidor Local Simple (Recomendado)
 
@@ -192,6 +232,8 @@ http-server -p 8000
 ```
 
 Luego abre en tu navegador: `http://localhost:8000`
+
+⚠️ **Nota**: Para desarrollo local, asegúrate de agregar `http://localhost:8000` en los URIs de redireccionamiento de tu OAuth 2.0 Client ID en Google Cloud Console.
 
 ### Opción B: Abrir Directamente
 
@@ -257,23 +299,47 @@ Edita el archivo `style.css` en la sección `:root`:
 
 ## ❗ Solución de Problemas
 
+### Error: "API keys are not supported by this API"
+- **Causa**: Estás intentando escribir en Google Sheets usando solo API Key
+- **Solución**: Debes configurar OAuth 2.0 Client ID (ver Paso 2.4)
+- Este es un requisito de Google - las API Keys solo funcionan para lectura, no para escritura
+
+### Error: "CLIENT_ID is not defined" o "CONFIG.CLIENT_ID is undefined"
+- **Causa**: No has configurado el CLIENT_ID en config.js
+- **Solución**:
+  1. Crea un OAuth 2.0 Client ID en Google Cloud Console (Paso 2.4)
+  2. Agrégalo a tu `config.js` como `CLIENT_ID: 'tu-client-id.apps.googleusercontent.com'`
+
+### No aparece la pantalla de login / Error al autenticar
+- Verifica que el CLIENT_ID sea correcto (debe terminar en `.apps.googleusercontent.com`)
+- Asegúrate de que los URIs de redireccionamiento en Google Cloud Console incluyan:
+  - `http://localhost:8000` para desarrollo local
+  - Tu dominio de GitHub Pages para producción (ej: `https://tuusuario.github.io`)
+- Abre la consola del navegador (F12) y busca errores de GAPI o GIS
+
 ### Error: "Failed to fetch"
 - Verifica que tu API Key sea correcta
 - Asegúrate de que la Google Sheets API esté habilitada
 - Comprueba las restricciones de tu API Key
 
 ### Error: "The caller does not have permission"
-- Verifica que tu Google Sheet esté compartido públicamente
-- O configura OAuth 2.0 para autenticación más segura
+- Verifica que tu Google Sheet esté compartido públicamente (al menos como "Editor")
+- O asegúrate de que tu cuenta de Google tenga acceso al Sheet
+- Comprueba que hayas autorizado la aplicación correctamente
 
 ### Los datos no aparecen en la hoja
 - Verifica el SPREADSHEET_ID
-- Verifica el SHEET_ID (debe ser 0 para la primera hoja)
+- Asegúrate de haber autorizado con OAuth2
 - Abre la consola del navegador (F12) y busca errores
 
 ### El formulario no se ve bien en móvil
 - Asegúrate de que estés accediendo desde `http://` o `https://`
 - No abras el archivo directamente (`file://`)
+
+### Error: "redirect_uri_mismatch"
+- **Causa**: El URI de redireccionamiento no está autorizado en tu OAuth 2.0 Client ID
+- **Solución**: Ve a Google Cloud Console → Credenciales → Tu OAuth Client ID → URIs de redireccionamiento autorizados
+- Agrega la URL exacta desde donde estás accediendo (ej: `http://localhost:8000` o `https://tuusuario.github.io`)
 
 ---
 
