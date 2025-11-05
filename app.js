@@ -148,22 +148,46 @@ function formatearFecha(fechaISO) {
 
 // Función para convertir DD/MM/YYYY a YYYY-MM-DD
 function formatearFechaISO(fechaDDMMYYYY) {
-    if (!fechaDDMMYYYY || typeof fechaDDMMYYYY !== 'string') return '';
+    if (!fechaDDMMYYYY || typeof fechaDDMMYYYY !== 'string') {
+        console.warn('formatearFechaISO: fecha vacía o no es string:', fechaDDMMYYYY);
+        return '';
+    }
+
+    // Limpiar espacios en blanco
+    const fechaLimpia = fechaDDMMYYYY.trim();
 
     // Verificar si ya está en formato ISO (YYYY-MM-DD)
-    if (fechaDDMMYYYY.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return fechaDDMMYYYY;
+    if (fechaLimpia.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return fechaLimpia;
     }
 
     // Convertir de DD/MM/YYYY a YYYY-MM-DD
-    const partes = fechaDDMMYYYY.split('/');
-    if (partes.length !== 3) return '';
+    const partes = fechaLimpia.split('/');
+    if (partes.length !== 3) {
+        console.warn('formatearFechaISO: formato de fecha inválido:', fechaLimpia);
+        return '';
+    }
 
     const [dia, mes, año] = partes;
+
+    // Validar que son números válidos
+    const diaNum = parseInt(dia);
+    const mesNum = parseInt(mes);
+    const añoNum = parseInt(año);
+
+    if (isNaN(diaNum) || isNaN(mesNum) || isNaN(añoNum)) {
+        console.warn('formatearFechaISO: partes no numéricas:', { dia, mes, año });
+        return '';
+    }
+
     // Asegurar que tienen el formato correcto con padding de ceros
-    const diaF = dia.padStart(2, '0');
-    const mesF = mes.padStart(2, '0');
-    return `${año}-${mesF}-${diaF}`;
+    const diaF = dia.trim().padStart(2, '0');
+    const mesF = mes.trim().padStart(2, '0');
+    const añoF = año.trim();
+
+    const resultado = `${añoF}-${mesF}-${diaF}`;
+    console.log('formatearFechaISO:', fechaLimpia, '=>', resultado);
+    return resultado;
 }
 
 // Función para formatear la fecha de hoy en DD/MM/YYYY
@@ -554,7 +578,10 @@ function renderizarListaGastos(terminoBusqueda = '') {
 
 function editarGasto(fila) {
     const gasto = gastosCache.find(g => g.fila === fila);
-    if (!gasto) return;
+    if (!gasto) {
+        console.error('No se encontró el gasto con fila:', fila);
+        return;
+    }
 
     // Cambiar a la vista de añadir
     cambiarTab('add');
@@ -563,9 +590,22 @@ function editarGasto(fila) {
     console.log('Editando gasto:', gasto);
 
     // Convertir fecha de DD/MM/YYYY a YYYY-MM-DD para el datepicker
-    const fechaISO = formatearFechaISO(gasto.fecha);
-    console.log('Fecha original:', gasto.fecha, '=> Fecha ISO:', fechaISO);
-    fechaInput.value = fechaISO;
+    if (gasto.fecha && gasto.fecha.trim() !== '') {
+        const fechaISO = formatearFechaISO(gasto.fecha);
+        console.log('Asignando fecha al datepicker:', fechaISO);
+
+        if (fechaISO) {
+            fechaInput.value = fechaISO;
+            // Forzar actualización del datepicker
+            fechaInput.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+            console.warn('No se pudo convertir la fecha:', gasto.fecha);
+            fechaInput.value = '';
+        }
+    } else {
+        console.warn('Fecha vacía en el gasto');
+        fechaInput.value = '';
+    }
 
     // Parsear el importe correctamente
     const importeNum = parsearImporte(gasto.importe);
@@ -586,8 +626,11 @@ function editarGasto(fila) {
     // Scroll al top
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // Foco en el primer campo
-    fechaInput.focus();
+    // Foco en el campo de importe en lugar de fecha (más común editarlo)
+    setTimeout(() => {
+        importeInput.focus();
+        importeInput.select();
+    }, 100);
 }
 
 async function enviarAGoogleSheets(datos, fila = null) {
