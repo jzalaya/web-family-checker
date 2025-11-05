@@ -146,19 +146,41 @@ function formatearFecha(fechaISO) {
     return `${dia}/${mes}/${año}`;
 }
 
-// Función para convertir DD/MM/YYYY a YYYY-MM-DD
-function formatearFechaISO(fechaDDMMYYYY) {
-    if (!fechaDDMMYYYY || typeof fechaDDMMYYYY !== 'string') {
-        console.warn('formatearFechaISO: fecha vacía o no es string:', fechaDDMMYYYY);
+// Función para convertir diferentes formatos de fecha a YYYY-MM-DD
+function formatearFechaISO(fechaStr) {
+    if (!fechaStr || typeof fechaStr !== 'string') {
+        console.warn('formatearFechaISO: fecha vacía o no es string:', fechaStr);
         return '';
     }
 
     // Limpiar espacios en blanco
-    const fechaLimpia = fechaDDMMYYYY.trim();
+    const fechaLimpia = fechaStr.trim();
 
     // Verificar si ya está en formato ISO (YYYY-MM-DD)
     if (fechaLimpia.match(/^\d{4}-\d{2}-\d{2}$/)) {
         return fechaLimpia;
+    }
+
+    // Manejar formato "Nov-4" o "Nov-04" (mes abreviado-día) de Google Sheets
+    const mesesAbrev = {
+        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+        'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+        'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+    };
+
+    const matchMesAbrev = fechaLimpia.match(/^([A-Za-z]{3})-(\d{1,2})$/);
+    if (matchMesAbrev) {
+        const mesAbrev = matchMesAbrev[1];
+        const dia = matchMesAbrev[2].padStart(2, '0');
+        const mesNum = mesesAbrev[mesAbrev];
+
+        if (mesNum) {
+            // Usar el año actual
+            const añoActual = new Date().getFullYear();
+            const resultado = `${añoActual}-${mesNum}-${dia}`;
+            console.log('formatearFechaISO (formato Google Sheets):', fechaLimpia, '=>', resultado);
+            return resultado;
+        }
     }
 
     // Convertir de DD/MM/YYYY a YYYY-MM-DD
