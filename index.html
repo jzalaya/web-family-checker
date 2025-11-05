@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Gastos</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Registro de Gastos</h1>
+            <p class="subtitle">Gestiona tus gastos de forma rápida y sencilla</p>
+            <p class="month-indicator" id="monthIndicator">📅 Cargando...</p>
+        </header>
+
+        <!-- Sistema de Tabs -->
+        <nav class="tabs">
+            <button class="tab active" data-tab="add" id="tabAdd">
+                <span class="tab-icon">➕</span>
+                <span class="tab-label">Añadir</span>
+            </button>
+            <button class="tab" data-tab="list" id="tabList">
+                <span class="tab-icon">📋</span>
+                <span class="tab-label">Mis Gastos</span>
+                <span class="tab-badge" id="expenseCount" style="display: none;">0</span>
+            </button>
+        </nav>
+
+        <!-- Vista: Añadir Gasto -->
+        <div class="tab-content active" id="contentAdd">
+            <form id="expenseForm" class="expense-form">
+                <div class="form-group">
+                    <label for="fecha">
+                        <span class="label-text">Fecha</span>
+                        <span class="label-optional">(opcional)</span>
+                    </label>
+                    <div class="date-input-group">
+                        <input
+                            type="date"
+                            id="fecha"
+                            name="fecha"
+                            class="date-input"
+                        >
+                        <button type="button" class="btn-today" id="btnHoy">Hoy</button>
+                    </div>
+                    <small class="help-text">Si lo dejas vacío, se usará la fecha de hoy</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="importe">
+                        <span class="label-text">Importe</span>
+                        <span class="label-required">*</span>
+                    </label>
+                    <div class="input-with-currency">
+                        <input
+                            type="number"
+                            id="importe"
+                            name="importe"
+                            placeholder="0.00"
+                            step="0.01"
+                            min="0.01"
+                            required
+                            inputmode="decimal"
+                        >
+                        <span class="currency">€</span>
+                    </div>
+                    <small class="error-text" id="importeError" style="display: none;"></small>
+                </div>
+
+                <div class="form-group">
+                    <label for="categoria">
+                        <span class="label-text">Categoría</span>
+                        <span class="label-required">*</span>
+                    </label>
+                    <select id="categoria" name="categoria" required>
+                        <option value="" disabled selected>Selecciona una categoría</option>
+                        <option value="Vodafone">📱 Vodafone</option>
+                        <option value="Naturgy">⚡ Naturgy</option>
+                        <option value="Pagos a plazos">💳 Pagos a plazos</option>
+                        <option value="Préstamos">🏦 Préstamos</option>
+                        <option value="Gimnasio">💪 Gimnasio</option>
+                        <option value="Parking">🅿️ Parking</option>
+                        <option value="Suscripciones">📺 Suscripciones</option>
+                        <option value="Adeslas">🏥 Adeslas</option>
+                        <option value="Hipoteca">🏠 Hipoteca</option>
+                        <option value="Comunidad">🏘️ Comunidad</option>
+                        <option value="Tarjetas de crédito">💳 Tarjetas de crédito</option>
+                        <option value="Supermercado">🛒 Supermercado</option>
+                        <option value="Comer fuera">🍽️ Comer fuera</option>
+                        <option value="Gasolina">⛽ Gasolina</option>
+                        <option value="Compras">🛍️ Compras</option>
+                        <option value="Negocios">💼 Negocios</option>
+                        <option value="Regalos">🎁 Regalos</option>
+                        <option value="Mascotas">🐾 Mascotas</option>
+                        <option value="Salud">💊 Salud</option>
+                        <option value="Estudios">📚 Estudios</option>
+                        <option value="Impuestos">📋 Impuestos</option>
+                        <option value="Andrea">👤 Andrea</option>
+                        <option value="Lotería">🎰 Lotería</option>
+                        <option value="Peluquería y Estética">✂️ Peluquería y Estética</option>
+                        <option value="Transporte">🚗 Transporte</option>
+                        <option value="Coche">🚙 Coche</option>
+                    </select>
+                    <small class="error-text" id="categoriaError" style="display: none;"></small>
+                </div>
+
+                <div class="form-group">
+                    <label for="descripcion">
+                        <span class="label-text">Descripción</span>
+                        <span class="label-required">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="descripcion"
+                        name="descripcion"
+                        placeholder="Ej: Compra del supermercado"
+                        required
+                        minlength="3"
+                        maxlength="200"
+                    >
+                    <small class="char-count" id="charCount">0/200</small>
+                    <small class="error-text" id="descripcionError" style="display: none;"></small>
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <span class="btn-icon">💾</span>
+                        <span class="btn-text">Guardar Gasto</span>
+                        <span class="btn-loader" style="display: none;">⏳</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="resetBtn">
+                        <span class="btn-icon">🗑️</span>
+                        Limpiar
+                    </button>
+                </div>
+            </form>
+
+            <!-- Mensaje de éxito con acciones -->
+            <div id="successMessage" class="success-card" style="display: none;">
+                <div class="success-header">
+                    <div class="success-icon">✅</div>
+                    <h3>¡Gasto guardado!</h3>
+                </div>
+                <div class="success-body">
+                    <div class="expense-summary" id="expenseSummary"></div>
+                </div>
+                <div class="success-actions">
+                    <button type="button" class="btn btn-primary" id="btnAddAnother">
+                        <span class="btn-icon">➕</span>
+                        Añadir otro
+                    </button>
+                    <button type="button" class="btn btn-outline" id="btnViewList">
+                        <span class="btn-icon">📋</span>
+                        Ver lista
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mensaje de error -->
+            <div id="errorMessage" class="error-card" style="display: none;">
+                <div class="error-header">
+                    <div class="error-icon">❌</div>
+                    <h3>Error al guardar</h3>
+                </div>
+                <div class="error-body" id="errorBody"></div>
+                <div class="error-actions">
+                    <button type="button" class="btn btn-primary" id="btnRetry">
+                        <span class="btn-icon">🔄</span>
+                        Reintentar
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="btnDismissError">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vista: Mis Gastos -->
+        <div class="tab-content" id="contentList">
+            <!-- Buscador -->
+            <div class="search-container">
+                <input
+                    type="text"
+                    id="searchInput"
+                    class="search-input"
+                    placeholder="🔍 Buscar por descripción, categoría o importe..."
+                >
+            </div>
+
+            <!-- Controles de la lista -->
+            <div class="list-controls">
+                <button class="btn btn-outline btn-small" id="btnRefresh">
+                    <span class="btn-icon">🔄</span>
+                    Actualizar
+                </button>
+                <button class="btn btn-outline btn-small" id="btnViewSheet">
+                    <span class="btn-icon">📊</span>
+                    Ver en Sheets
+                </button>
+            </div>
+
+            <!-- Loading state -->
+            <div id="loadingExpenses" class="loading-state" style="display: none;">
+                <div class="loading-spinner">⏳</div>
+                <p>Cargando gastos...</p>
+            </div>
+
+            <!-- Empty state -->
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <div class="empty-icon">💰</div>
+                <h3>No hay gastos registrados</h3>
+                <p>Comienza añadiendo tu primer gasto</p>
+                <button class="btn btn-primary" id="btnGoToAdd">
+                    <span class="btn-icon">➕</span>
+                    Añadir Gasto
+                </button>
+            </div>
+
+            <!-- Lista de gastos -->
+            <div id="expensesList" class="expenses-list"></div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
