@@ -17,7 +17,10 @@ Una aplicación web sencilla y elegante para registrar gastos directamente en Go
 Lee la [Guía de Configuración completa](CONFIGURACION.md) para configurar:
 - Google Cloud Console
 - API Key de Google Sheets
+- **OAuth 2.0 Client ID** (requerido para escritura)
 - Permisos del spreadsheet
+
+⚠️ **Importante**: Si ves el error **"redirect_uri_mismatch"**, consulta la [Guía de Solución OAuth](OAUTH_TROUBLESHOOTING.md) para una solución rápida.
 
 ### 2. Configurar Variables de Entorno
 

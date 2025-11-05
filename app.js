@@ -981,10 +981,19 @@ async function initializeGapiClient() {
 }
 
 function gisLoaded() {
+    // Obtener el origin actual para el redirect_uri
+    const redirectUri = window.location.origin;
+    console.log('🔗 Redirect URI configurado:', redirectUri);
+    console.log('ℹ️  Asegúrate de que este URI esté autorizado en Google Cloud Console');
+
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.CLIENT_ID,
         scope: 'https://www.googleapis.com/auth/spreadsheets',
         callback: '', // se definirá más tarde
+        // Note: GIS automatically uses window.location.origin as redirect_uri
+        // Make sure this exact URI is in your OAuth 2.0 Client ID authorized redirect URIs:
+        // - For production: https://jzalaya.github.io
+        // - For local dev: http://localhost:8000
     });
     gisInited = true;
     console.log('✅ GIS client inicializado');

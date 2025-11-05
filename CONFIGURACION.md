@@ -88,10 +88,19 @@ Esta guía te ayudará a configurar la aplicación para que funcione con tu Goog
 3. Vuelve a **"Credenciales"** → **"Crear credenciales"** → **"ID de cliente de OAuth 2.0"**
 4. Tipo de aplicación: **"Aplicación web"**
 5. Nombre: "Cliente Web Registro Gastos"
-6. **URIs de redireccionamiento autorizados** (IMPORTANTE):
+6. **URIs de redireccionamiento autorizados** (⚠️ MUY IMPORTANTE):
+
+   Debes agregar **EXACTAMENTE** estos URIs (solo el dominio, SIN la ruta del repositorio):
+
    - Para desarrollo local: `http://localhost:8000`
-   - Para producción: `https://tuusuario.github.io` (tu dominio de GitHub Pages)
-   - Ejemplo: `https://jzalaya.github.io`
+   - Para producción GitHub Pages: `https://jzalaya.github.io`
+
+   **Nota crítica**:
+   - ✅ CORRECTO: `https://jzalaya.github.io` (solo el dominio)
+   - ❌ INCORRECTO: `https://jzalaya.github.io/web-family-checker/` (con ruta)
+   - ❌ INCORRECTO: `https://jzalaya.github.io/web-family-checker` (con ruta, sin slash)
+
+   El OAuth de Google usa automáticamente `window.location.origin` como redirect_uri, que es solo el dominio sin rutas.
 
 7. Haz clic en **"Crear"**
 8. Se mostrará tu **Client ID** → **Cópialo** (lo necesitarás para CONFIG.CLIENT_ID)
@@ -169,7 +178,8 @@ Si vas a desplegar la aplicación en GitHub Pages o en producción:
 
 5. Una vez configurados, cada vez que hagas push a la rama `main`, GitHub Actions generará automáticamente el archivo `config.js` con tus credenciales.
 
-⚠️ **IMPORTANTE**: Asegúrate de que en el OAuth 2.0 Client ID de Google Cloud Console, los **URIs de redireccionamiento autorizados** incluyen tu URL de GitHub Pages (ej: `https://tuusuario.github.io`).
+⚠️ **IMPORTANTE**: Asegúrate de que en el OAuth 2.0 Client ID de Google Cloud Console, los **URIs de redireccionamiento autorizados** incluyan:
+   - `https://jzalaya.github.io` (solo el dominio, NO incluyas `/web-family-checker/`)
 
 ### 3.3 Ejemplo Completo
 
@@ -233,7 +243,7 @@ http-server -p 8000
 
 Luego abre en tu navegador: `http://localhost:8000`
 
-⚠️ **Nota**: Para desarrollo local, asegúrate de agregar `http://localhost:8000` en los URIs de redireccionamiento de tu OAuth 2.0 Client ID en Google Cloud Console.
+⚠️ **Nota**: Para desarrollo local, asegúrate de agregar **EXACTAMENTE** `http://localhost:8000` en los "URIs de redireccionamiento autorizados" de tu OAuth 2.0 Client ID en Google Cloud Console. Si usas un puerto diferente, ajusta el URI en consecuencia.
 
 ### Opción B: Abrir Directamente
 
@@ -312,10 +322,11 @@ Edita el archivo `style.css` en la sección `:root`:
 
 ### No aparece la pantalla de login / Error al autenticar
 - Verifica que el CLIENT_ID sea correcto (debe terminar en `.apps.googleusercontent.com`)
-- Asegúrate de que los URIs de redireccionamiento en Google Cloud Console incluyan:
+- **Paso importante**: Abre la consola del navegador (F12 → Consola) y busca el mensaje "🔗 Redirect URI configurado: ..." - anota ese URI
+- Asegúrate de que ese URI EXACTO esté en los "URIs de redireccionamiento autorizados" en Google Cloud Console:
   - `http://localhost:8000` para desarrollo local
-  - Tu dominio de GitHub Pages para producción (ej: `https://tuusuario.github.io`)
-- Abre la consola del navegador (F12) y busca errores de GAPI o GIS
+  - `https://jzalaya.github.io` para producción (SOLO el dominio)
+- Busca errores adicionales de GAPI o GIS en la consola
 
 ### Error: "Failed to fetch"
 - Verifica que tu API Key sea correcta
@@ -338,8 +349,19 @@ Edita el archivo `style.css` en la sección `:root`:
 
 ### Error: "redirect_uri_mismatch"
 - **Causa**: El URI de redireccionamiento no está autorizado en tu OAuth 2.0 Client ID
-- **Solución**: Ve a Google Cloud Console → Credenciales → Tu OAuth Client ID → URIs de redireccionamiento autorizados
-- Agrega la URL exacta desde donde estás accediendo (ej: `http://localhost:8000` o `https://tuusuario.github.io`)
+- **Diagnóstico**: Abre la consola del navegador (F12) y busca el mensaje "🔗 Redirect URI configurado:" - ese es el URI exacto que necesitas autorizar
+- **Solución**:
+  1. Ve a [Google Cloud Console](https://console.cloud.google.com)
+  2. Navega a: **APIs y servicios** → **Credenciales**
+  3. Haz clic en tu **OAuth 2.0 Client ID**
+  4. En **"URIs de redireccionamiento autorizados"** agrega estos URIs EXACTOS:
+     - `http://localhost:8000` (para desarrollo local)
+     - `https://jzalaya.github.io` (para producción - ⚠️ SOLO el dominio, SIN `/web-family-checker/`)
+  5. Haz clic en **"Guardar"**
+  6. Espera 1-2 minutos para que los cambios se propaguen
+  7. Recarga la página de tu aplicación
+
+**Importante**: El redirect_uri es SOLO el dominio (`window.location.origin`), NO incluye la ruta del repositorio.
 
 ---
 
