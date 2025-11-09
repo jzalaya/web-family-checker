@@ -88,10 +88,18 @@ Esta guía te ayudará a configurar la aplicación para que funcione con tu Goog
 3. Vuelve a **"Credenciales"** → **"Crear credenciales"** → **"ID de cliente de OAuth 2.0"**
 4. Tipo de aplicación: **"Aplicación web"**
 5. Nombre: "Cliente Web Registro Gastos"
-6. **URIs de redireccionamiento autorizados** (⚠️ MUY IMPORTANTE):
 
-   Debes agregar **EXACTAMENTE** estos URIs (solo el dominio, SIN la ruta del repositorio):
+6. ⚠️ **CRÍTICO - Configura los URIs en DOS lugares** (ambos obligatorios):
 
+   **A) Orígenes de JavaScript autorizados** (Authorized JavaScript origins):
+
+   Haz clic en **"+ AGREGAR URI"** y agrega **EXACTAMENTE**:
+   - Para desarrollo local: `http://localhost:8000`
+   - Para producción GitHub Pages: `https://jzalaya.github.io`
+
+   **B) URIs de redireccionamiento autorizados** (Authorized redirect URIs):
+
+   Haz clic en **"+ AGREGAR URI"** y agrega los **MISMOS** URIs:
    - Para desarrollo local: `http://localhost:8000`
    - Para producción GitHub Pages: `https://jzalaya.github.io`
 
@@ -99,6 +107,7 @@ Esta guía te ayudará a configurar la aplicación para que funcione con tu Goog
    - ✅ CORRECTO: `https://jzalaya.github.io` (solo el dominio)
    - ❌ INCORRECTO: `https://jzalaya.github.io/web-family-checker/` (con ruta)
    - ❌ INCORRECTO: `https://jzalaya.github.io/web-family-checker` (con ruta, sin slash)
+   - 🔴 **Si solo configuras uno de los dos lugares, obtendrás el error `redirect_uri_mismatch`**
 
    El OAuth de Google usa automáticamente `window.location.origin` como redirect_uri, que es solo el dominio sin rutas.
 
@@ -348,20 +357,30 @@ Edita el archivo `style.css` en la sección `:root`:
 - No abras el archivo directamente (`file://`)
 
 ### Error: "redirect_uri_mismatch"
-- **Causa**: El URI de redireccionamiento no está autorizado en tu OAuth 2.0 Client ID
+- **Causa**: El URI no está autorizado en tu OAuth 2.0 Client ID, o falta configurarlo en uno de los DOS lugares requeridos
 - **Diagnóstico**: Abre la consola del navegador (F12) y busca el mensaje "🔗 Redirect URI configurado:" - ese es el URI exacto que necesitas autorizar
 - **Solución**:
   1. Ve a [Google Cloud Console](https://console.cloud.google.com)
   2. Navega a: **APIs y servicios** → **Credenciales**
   3. Haz clic en tu **OAuth 2.0 Client ID**
-  4. En **"URIs de redireccionamiento autorizados"** agrega estos URIs EXACTOS:
+  4. ⚠️ **CRÍTICO**: Agrega los URIs en **AMBAS secciones** (esto es obligatorio):
+
+     **A) Orígenes de JavaScript autorizados** (Authorized JavaScript origins):
+     - `http://localhost:8000` (para desarrollo local)
+     - `https://jzalaya.github.io` (para producción)
+
+     **B) URIs de redireccionamiento autorizados** (Authorized redirect URIs):
      - `http://localhost:8000` (para desarrollo local)
      - `https://jzalaya.github.io` (para producción - ⚠️ SOLO el dominio, SIN `/web-family-checker/`)
+
   5. Haz clic en **"Guardar"**
   6. Espera 1-2 minutos para que los cambios se propaguen
-  7. Recarga la página de tu aplicación
+  7. Borra la caché del navegador o usa ventana de incógnito
+  8. Recarga la página de tu aplicación
 
-**Importante**: El redirect_uri es SOLO el dominio (`window.location.origin`), NO incluye la ruta del repositorio.
+**Importante**:
+- El redirect_uri es SOLO el dominio (`window.location.origin`), NO incluye la ruta del repositorio.
+- 🔴 **Si solo configuras uno de los dos lugares (JavaScript origins O redirect URIs), el error persistirá**
 
 ---
 
