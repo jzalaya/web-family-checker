@@ -11,6 +11,12 @@ const btnDismissError = document.getElementById('btnDismissError');
 const btnRefresh = document.getElementById('btnRefresh');
 const btnGoToAdd = document.getElementById('btnGoToAdd');
 
+// Delete dialog
+const deleteDialog = document.getElementById('deleteDialog');
+const deleteExpenseSummary = document.getElementById('deleteExpenseSummary');
+const btnCancelDelete = document.getElementById('btnCancelDelete');
+const btnConfirmDelete = document.getElementById('btnConfirmDelete');
+
 const fechaInput = document.getElementById('fecha');
 const importeInput = document.getElementById('importe');
 const categoriaInput = document.getElementById('categoria');
@@ -50,6 +56,7 @@ const btnRefreshDashboard = document.getElementById('btnRefreshDashboard');
 let gastosCache = [];
 let isEditMode = false;
 let gastoEnEdicion = null;
+let gastoAEliminar = null; // Gasto que se está por eliminar
 let currentSheetId = null; // Se obtendrá dinámicamente
 let currentSheetName = ''; // Nombre de la hoja actual (ej: "NOV")
 
@@ -1099,6 +1106,9 @@ function renderizarListaGastos(terminoBusqueda = '') {
                         <button class="btn btn-icon-only btn-edit-expense" data-fila="${gasto.fila}" aria-label="Editar gasto">
                             ✏️
                         </button>
+                        <button class="btn btn-icon-only btn-delete-expense" data-fila="${gasto.fila}" aria-label="Eliminar gasto">
+                            🗑️
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1110,6 +1120,14 @@ function renderizarListaGastos(terminoBusqueda = '') {
         btn.addEventListener('click', (e) => {
             const fila = parseInt(e.currentTarget.getAttribute('data-fila'));
             editarGasto(fila);
+        });
+    });
+
+    // Añadir event listeners a los botones de eliminar
+    document.querySelectorAll('.btn-delete-expense').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const fila = parseInt(e.currentTarget.getAttribute('data-fila'));
+            mostrarDialogoEliminar(fila);
         });
     });
 }
@@ -1177,6 +1195,156 @@ function editarGasto(fila) {
         importeInput.select();
         console.log('=== FORMULARIO LISTO PARA EDITAR ===');
     }, 150);
+}
+
+// ==================== FUNCIONES DE ELIMINACIÓN ====================
+
+function mostrarDialogoEliminar(fila) {
+    const gasto = gastosCache.find(g => g.fila === fila);
+    if (!gasto) {
+        console.error('No se encontró el gasto con fila:', fila);
+        return;
+    }
+
+    // Guardar el gasto a eliminar
+    gastoAEliminar = gasto;
+
+    // Construir el resumen del gasto
+    const categoriaEmoji = obtenerEmojiCategoria(gasto.categoria);
+    const importe = parsearImporte(gasto.importe);
+
+    deleteExpenseSummary.innerHTML = `
+        <div class="summary-row">
+            <span class="summary-label">Fecha</span>
+            <span class="summary-value">${gasto.fecha}</span>
+        </div>
+        <div class="summary-row">
+            <span class="summary-label">Importe</span>
+            <span class="summary-value">${importe.toFixed(2)} €</span>
+        </div>
+        <div class="summary-row">
+            <span class="summary-label">Categoría</span>
+            <span class="summary-value">${categoriaEmoji} ${gasto.categoria}</span>
+        </div>
+        <div class="summary-row">
+            <span class="summary-label">Descripción</span>
+            <span class="summary-value">${gasto.descripcion}</span>
+        </div>
+    `;
+
+    // Mostrar el diálogo
+    deleteDialog.style.display = 'flex';
+}
+
+function ocultarDialogoEliminar() {
+    deleteDialog.style.display = 'none';
+    gastoAEliminar = null;
+}
+
+function toggleBotonEliminar(eliminando) {
+    btnConfirmDelete.disabled = eliminando;
+    btnCancelDelete.disabled = eliminando;
+
+    const btnText = btnConfirmDelete.querySelector('.btn-text');
+    const btnIcon = btnConfirmDelete.querySelector('.btn-icon');
+    const btnLoader = btnConfirmDelete.querySelector('.btn-loader');
+
+    if (eliminando) {
+        btnText.textContent = 'Eliminando...';
+        btnIcon.style.display = 'none';
+        btnLoader.style.display = 'inline-block';
+    } else {
+        btnText.textContent = 'Eliminar';
+        btnIcon.style.display = 'inline';
+        btnLoader.style.display = 'none';
+    }
+}
+
+async function eliminarGasto() {
+    if (!gastoAEliminar) {
+        console.error('No hay gasto para eliminar');
+        return;
+    }
+
+    toggleBotonEliminar(true);
+
+    try {
+        // Obtener todas las filas después de la fila a eliminar
+        const filaAEliminar = gastoAEliminar.fila;
+
+        console.log(`🗑️ Eliminando fila ${filaAEliminar} de la hoja ${currentSheetName}`);
+
+        // Usar batchUpdate para eliminar la fila
+        const requests = [
+            {
+                deleteDimension: {
+                    range: {
+                        sheetId: currentSheetId,
+                        dimension: 'ROWS',
+                        startIndex: filaAEliminar - 1, // 0-indexed
+                        endIndex: filaAEliminar // Exclusivo
+                    }
+                }
+            }
+        ];
+
+        await gapi.client.sheets.spreadsheets.batchUpdate({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            resource: { requests }
+        });
+
+        console.log('✅ Fila eliminada exitosamente');
+
+        // Eliminar del cache
+        const index = gastosCache.findIndex(g => g.fila === filaAEliminar);
+        if (index !== -1) {
+            gastosCache.splice(index, 1);
+        }
+
+        // Actualizar los números de fila en el cache (todas las filas después de la eliminada se mueven hacia arriba)
+        gastosCache.forEach(gasto => {
+            if (gasto.fila > filaAEliminar) {
+                gasto.fila--;
+            }
+        });
+
+        // Actualizar la vista
+        ocultarDialogoEliminar();
+
+        // Verificar si hay gastos después de eliminar
+        if (gastosCache.length === 0) {
+            expensesList.innerHTML = '';
+            emptyState.style.display = 'block';
+        } else {
+            renderizarListaGastos(searchInput.value.trim());
+        }
+
+        // Actualizar el contador
+        actualizarContadorGastos();
+
+        // Mostrar mensaje de éxito (opcional)
+        console.log('✅ Gasto eliminado correctamente');
+
+        // Limpiar el cache del dashboard para forzar recarga
+        if (contentDashboard.classList.contains('active')) {
+            cargarDashboard();
+        }
+
+    } catch (error) {
+        console.error('❌ Error al eliminar el gasto:', error);
+        let mensajeError = 'Error al eliminar el gasto. ';
+
+        if (error.result && error.result.error) {
+            mensajeError += error.result.error.message;
+        } else {
+            mensajeError += 'Verifica tu conexión y permisos de Google Sheets.';
+        }
+
+        ocultarDialogoEliminar();
+        mostrarErrorMessage(mensajeError);
+    } finally {
+        toggleBotonEliminar(false);
+    }
 }
 
 async function enviarAGoogleSheets(datos, fila = null) {
@@ -1467,6 +1635,22 @@ btnRefreshDashboard.addEventListener('click', () => {
 // Botón "Añadir Gasto" en empty state
 btnGoToAdd.addEventListener('click', () => {
     cambiarTab('add');
+});
+
+// Botones del diálogo de eliminar
+btnCancelDelete.addEventListener('click', () => {
+    ocultarDialogoEliminar();
+});
+
+btnConfirmDelete.addEventListener('click', () => {
+    eliminarGasto();
+});
+
+// Cerrar diálogo al hacer clic fuera de él
+deleteDialog.addEventListener('click', (e) => {
+    if (e.target === deleteDialog) {
+        ocultarDialogoEliminar();
+    }
 });
 
 // Buscador en la lista de gastos
