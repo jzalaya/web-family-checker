@@ -23,8 +23,10 @@ const errorBody = document.getElementById('errorBody');
 const charCount = document.getElementById('charCount');
 
 // Tabs
+const tabDashboard = document.getElementById('tabDashboard');
 const tabAdd = document.getElementById('tabAdd');
 const tabList = document.getElementById('tabList');
+const contentDashboard = document.getElementById('contentDashboard');
 const contentAdd = document.getElementById('contentAdd');
 const contentList = document.getElementById('contentList');
 const expenseCount = document.getElementById('expenseCount');
@@ -34,6 +36,15 @@ const expensesList = document.getElementById('expensesList');
 const loadingExpenses = document.getElementById('loadingExpenses');
 const emptyState = document.getElementById('emptyState');
 const searchInput = document.getElementById('searchInput');
+
+// Dashboard view
+const loadingDashboard = document.getElementById('loadingDashboard');
+const dashboardContent = document.getElementById('dashboardContent');
+const totalIngresos = document.getElementById('totalIngresos');
+const totalGastos = document.getElementById('totalGastos');
+const balance = document.getElementById('balance');
+const categoryStats = document.getElementById('categoryStats');
+const btnRefreshDashboard = document.getElementById('btnRefreshDashboard');
 
 // ==================== ESTADO DE LA APLICACIÓN ====================
 let gastosCache = [];
@@ -361,6 +372,166 @@ function actualizarContadorGastos() {
     }
 }
 
+// ==================== DASHBOARD ====================
+
+async function cargarDashboard() {
+    loadingDashboard.style.display = 'block';
+    dashboardContent.style.display = 'none';
+
+    try {
+        // Leer totales de ingresos (F4:H6) y gastos (J4:J6)
+        const rangeTotales = `${currentSheetName}!F4:J6`;
+        const responseTotales = await gapi.client.sheets.spreadsheets.values.get({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            range: rangeTotales,
+        });
+
+        const values = responseTotales.result.values || [];
+
+        // F4:H6 son las columnas 0-2, J4:J6 es la columna 4
+        // Como las celdas están mergeadas, el valor estará en la primera celda
+        let ingresosStr = '0';
+        let gastosStr = '0';
+
+        if (values.length > 0 && values[0].length > 0) {
+            ingresosStr = values[0][0] || '0'; // F4 (primera fila, primera columna)
+        }
+        if (values.length > 0 && values[0].length > 4) {
+            gastosStr = values[0][4] || '0'; // J4 (primera fila, quinta columna)
+        }
+
+        const ingresos = parsearImporte(ingresosStr);
+        const gastos = parsearImporte(gastosStr);
+        const balanceValue = ingresos - gastos;
+
+        // Actualizar los valores en el dashboard
+        totalIngresos.textContent = `${ingresos.toFixed(2)} €`;
+        totalGastos.textContent = `${gastos.toFixed(2)} €`;
+        balance.textContent = `${balanceValue.toFixed(2)} €`;
+
+        // Cambiar color del balance según si es positivo o negativo
+        if (balanceValue >= 0) {
+            balance.style.color = 'var(--success-color)';
+        } else {
+            balance.style.color = 'var(--error-color)';
+        }
+
+        // Cargar estadísticas por categoría
+        await cargarEstadisticasCategorias();
+
+        loadingDashboard.style.display = 'none';
+        dashboardContent.style.display = 'block';
+    } catch (error) {
+        console.error('Error al cargar dashboard:', error);
+        loadingDashboard.style.display = 'none';
+        dashboardContent.innerHTML = `
+            <div class="error-card">
+                <div class="error-header">
+                    <div class="error-icon">❌</div>
+                    <h3>Error al cargar dashboard</h3>
+                </div>
+                <div class="error-body">
+                    ${error.result?.error?.message || 'No se pudo cargar el dashboard. Verifica tu conexión.'}
+                </div>
+            </div>
+        `;
+        dashboardContent.style.display = 'block';
+    }
+}
+
+async function cargarEstadisticasCategorias() {
+    try {
+        // Usar el cache de gastos si ya está cargado, sino cargarlo
+        if (gastosCache.length === 0) {
+            const range = `${currentSheetName}!B38:N`;
+            const response = await gapi.client.sheets.spreadsheets.values.get({
+                spreadsheetId: CONFIG.SPREADSHEET_ID,
+                range: range,
+            });
+
+            const values = response.result.values || [];
+            gastosCache = values.map((row, index) => ({
+                fila: 38 + index,
+                fecha: row[0] ? row[0].toString().trim() : '',
+                importe: row[2] ? row[2].toString().trim() : '0',
+                categoria: row[5] ? row[5].toString().trim() : '',
+                descripcion: row[9] ? row[9].toString().trim() : ''
+            })).filter(gasto => {
+                const tieneFecha = gasto.fecha !== '';
+                const tieneImporte = gasto.importe !== '0' && gasto.importe !== '';
+                const tieneCategoria = gasto.categoria !== '';
+                const tieneDescripcion = gasto.descripcion !== '';
+                return (tieneFecha && (tieneCategoria || tieneDescripcion)) ||
+                       (tieneImporte && tieneDescripcion);
+            });
+        }
+
+        // Agrupar por categoría y sumar
+        const categorias = {};
+        gastosCache.forEach(gasto => {
+            if (gasto.categoria) {
+                const importe = parsearImporte(gasto.importe);
+                if (!categorias[gasto.categoria]) {
+                    categorias[gasto.categoria] = {
+                        total: 0,
+                        count: 0
+                    };
+                }
+                categorias[gasto.categoria].total += importe;
+                categorias[gasto.categoria].count++;
+            }
+        });
+
+        // Calcular el total de gastos
+        const totalGastosSum = Object.values(categorias).reduce((sum, cat) => sum + cat.total, 0);
+
+        // Ordenar por total descendente
+        const categoriasOrdenadas = Object.entries(categorias)
+            .sort((a, b) => b[1].total - a[1].total);
+
+        // Renderizar estadísticas
+        if (categoriasOrdenadas.length === 0) {
+            categoryStats.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📊</div>
+                    <p>No hay gastos registrados este mes</p>
+                </div>
+            `;
+            return;
+        }
+
+        categoryStats.innerHTML = categoriasOrdenadas.map(([categoria, data]) => {
+            const emoji = obtenerEmojiCategoria(categoria);
+            const porcentaje = totalGastosSum > 0 ? (data.total / totalGastosSum * 100) : 0;
+
+            return `
+                <div class="category-stat-item">
+                    <div class="category-stat-header">
+                        <div class="category-stat-info">
+                            <span class="category-stat-emoji">${emoji}</span>
+                            <span class="category-stat-name">${categoria}</span>
+                            <span class="category-stat-count">(${data.count})</span>
+                        </div>
+                        <div class="category-stat-amount">${data.total.toFixed(2)} €</div>
+                    </div>
+                    <div class="category-stat-bar-container">
+                        <div class="category-stat-bar" style="width: ${porcentaje}%"></div>
+                    </div>
+                    <div class="category-stat-percentage">${porcentaje.toFixed(1)}%</div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (error) {
+        console.error('Error al cargar estadísticas por categoría:', error);
+        categoryStats.innerHTML = `
+            <div class="error-card">
+                <div class="error-body">Error al cargar estadísticas</div>
+            </div>
+        `;
+    }
+}
+
 // ==================== TABS ====================
 
 function cambiarTab(tabName) {
@@ -373,7 +544,11 @@ function cambiarTab(tabName) {
     });
 
     // Activar tab seleccionada
-    if (tabName === 'add') {
+    if (tabName === 'dashboard') {
+        tabDashboard.classList.add('active');
+        contentDashboard.classList.add('active');
+        cargarDashboard();
+    } else if (tabName === 'add') {
         tabAdd.classList.add('active');
         contentAdd.classList.add('active');
     } else if (tabName === 'list') {
@@ -383,6 +558,7 @@ function cambiarTab(tabName) {
     }
 }
 
+tabDashboard.addEventListener('click', () => cambiarTab('dashboard'));
 tabAdd.addEventListener('click', () => cambiarTab('add'));
 tabList.addEventListener('click', () => cambiarTab('list'));
 
@@ -571,19 +747,6 @@ function renderizarListaGastos(terminoBusqueda = '') {
             </div>
         `;
     }).join('');
-
-    // Añadir resumen total
-    expensesList.innerHTML += `
-        <div class="expenses-summary">
-            <div class="expenses-summary-content">
-                <div>
-                    <div class="expenses-summary-label">Total de gastos${terminoBusqueda ? ' (filtrados)' : ''}</div>
-                    <div class="expenses-summary-count">${gastosFiltrados.length} ${gastosFiltrados.length === 1 ? 'gasto' : 'gastos'}</div>
-                </div>
-                <div class="expenses-summary-amount">${total.toFixed(2)} €</div>
-            </div>
-        </div>
-    `;
 
     // Añadir event listeners a los botones de editar
     document.querySelectorAll('.btn-edit-expense').forEach(btn => {
@@ -938,6 +1101,12 @@ btnRefresh.addEventListener('click', () => {
     cargarGastos();
 });
 
+// Botón "Actualizar" en el dashboard
+btnRefreshDashboard.addEventListener('click', () => {
+    gastosCache = []; // Limpiar cache para forzar recarga
+    cargarDashboard();
+});
+
 // Botón "Añadir Gasto" en empty state
 btnGoToAdd.addEventListener('click', () => {
     cambiarTab('add');
@@ -1085,8 +1254,8 @@ async function onSignInSuccess() {
         // Cargar gastos inicial para actualizar el contador
         await cargarGastos();
 
-        // Volver a la tab de añadir después de cargar
-        cambiarTab('add');
+        // Mostrar el dashboard como vista inicial
+        cambiarTab('dashboard');
     } catch (error) {
         console.error('❌ Error al inicializar después del login:', error);
         mostrarErrorMessage('Error al conectar con Google Sheets. Verifica que el spreadsheet existe.');
