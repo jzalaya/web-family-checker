@@ -11,12 +11,6 @@ const btnDismissError = document.getElementById('btnDismissError');
 const btnRefresh = document.getElementById('btnRefresh');
 const btnGoToAdd = document.getElementById('btnGoToAdd');
 
-// Delete dialog
-const deleteDialog = document.getElementById('deleteDialog');
-const deleteExpenseSummary = document.getElementById('deleteExpenseSummary');
-const btnCancelDelete = document.getElementById('btnCancelDelete');
-const btnConfirmDelete = document.getElementById('btnConfirmDelete');
-
 const fechaInput = document.getElementById('fecha');
 const importeInput = document.getElementById('importe');
 const categoriaInput = document.getElementById('categoria');
@@ -56,7 +50,6 @@ const btnRefreshDashboard = document.getElementById('btnRefreshDashboard');
 let gastosCache = [];
 let isEditMode = false;
 let gastoEnEdicion = null;
-let gastoAEliminar = null; // Gasto que se está por eliminar
 let currentSheetId = null; // Se obtendrá dinámicamente
 let currentSheetName = ''; // Nombre de la hoja actual (ej: "NOV")
 
@@ -427,6 +420,9 @@ async function cargarDashboard() {
         // Cargar estadísticas por categoría
         await cargarEstadisticasCategorias();
 
+        // Cargar estadísticas avanzadas
+        await cargarEstadisticasAvanzadas();
+
         loadingDashboard.style.display = 'none';
         dashboardContent.style.display = 'block';
     } catch (error) {
@@ -537,6 +533,359 @@ async function cargarEstadisticasCategorias() {
                 <div class="error-body">Error al cargar estadísticas</div>
             </div>
         `;
+    }
+}
+
+// ==================== ESTADÍSTICAS AVANZADAS ====================
+
+// Variable para almacenar la instancia del gráfico
+let evolutionChartInstance = null;
+
+// Obtener el nombre de la hoja del mes dado un índice relativo al mes actual
+// mesesAtras: 0 = mes actual, 1 = mes anterior, etc.
+function obtenerNombreMesPorIndex(mesesAtras) {
+    const meses = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const hoy = new Date();
+    const mesIndex = hoy.getMonth(); // 0-11
+    const añoActual = hoy.getFullYear();
+
+    // Calcular el índice del mes restando los meses
+    let targetMesIndex = mesIndex - mesesAtras;
+    let targetAño = añoActual;
+
+    // Ajustar si vamos a años anteriores
+    while (targetMesIndex < 0) {
+        targetMesIndex += 12;
+        targetAño--;
+    }
+
+    return {
+        nombreHoja: meses[targetMesIndex],
+        mes: targetMesIndex + 1, // 1-12
+        año: targetAño
+    };
+}
+
+// Cargar gastos de un mes específico
+async function cargarGastosDeMes(nombreHoja) {
+    try {
+        const range = `${nombreHoja}!B38:N`;
+        const response = await gapi.client.sheets.spreadsheets.values.get({
+            spreadsheetId: CONFIG.SPREADSHEET_ID,
+            range: range,
+        });
+
+        const values = response.result.values || [];
+        const gastos = values.map((row, index) => ({
+            fila: 38 + index,
+            fecha: row[0] ? row[0].toString().trim() : '',
+            importe: row[2] ? row[2].toString().trim() : '0',
+            categoria: row[5] ? row[5].toString().trim() : '',
+            descripcion: row[9] ? row[9].toString().trim() : ''
+        })).filter(gasto => {
+            const tieneFecha = gasto.fecha !== '';
+            const tieneImporte = gasto.importe !== '0' && gasto.importe !== '';
+            const tieneCategoria = gasto.categoria !== '';
+            const tieneDescripcion = gasto.descripcion !== '';
+            return (tieneFecha && (tieneCategoria || tieneDescripcion)) ||
+                   (tieneImporte && tieneDescripcion);
+        });
+
+        return gastos;
+    } catch (error) {
+        console.warn(`No se pudieron cargar datos de ${nombreHoja}:`, error);
+        return [];
+    }
+}
+
+// Calcular el total de gastos de un array de gastos
+function calcularTotalGastos(gastos) {
+    return gastos.reduce((total, gasto) => total + parsearImporte(gasto.importe), 0);
+}
+
+// Calcular estadísticas avanzadas
+async function calcularEstadisticasAvanzadas() {
+    try {
+        const estadisticas = {};
+
+        // Cargar datos del mes actual
+        const mesActualInfo = obtenerNombreMesPorIndex(0);
+        const gastosActuales = await cargarGastosDeMes(mesActualInfo.nombreHoja);
+        const totalMesActual = calcularTotalGastos(gastosActuales);
+        estadisticas.totalMesActual = totalMesActual;
+
+        // Cargar datos del mes anterior
+        const mesAnteriorInfo = obtenerNombreMesPorIndex(1);
+        const gastosAnteriores = await cargarGastosDeMes(mesAnteriorInfo.nombreHoja);
+        const totalMesAnterior = calcularTotalGastos(gastosAnteriores);
+        estadisticas.totalMesAnterior = totalMesAnterior;
+
+        // Calcular cambio porcentual
+        if (totalMesAnterior > 0) {
+            const cambio = ((totalMesActual - totalMesAnterior) / totalMesAnterior) * 100;
+            estadisticas.cambioMensual = cambio;
+        } else {
+            estadisticas.cambioMensual = totalMesActual > 0 ? 100 : 0;
+        }
+
+        // Calcular promedio diario del mes actual
+        const hoy = new Date();
+        const diaDelMes = hoy.getDate();
+        estadisticas.promedioDiario = diaDelMes > 0 ? totalMesActual / diaDelMes : 0;
+        estadisticas.diasTranscurridos = diaDelMes;
+
+        // Encontrar día con más gasto
+        const gastosPorDia = {};
+        gastosActuales.forEach(gasto => {
+            if (gasto.fecha) {
+                const fecha = gasto.fecha;
+                if (!gastosPorDia[fecha]) {
+                    gastosPorDia[fecha] = 0;
+                }
+                gastosPorDia[fecha] += parsearImporte(gasto.importe);
+            }
+        });
+
+        let diaMasGasto = '-';
+        let importeMasGasto = 0;
+        Object.entries(gastosPorDia).forEach(([dia, total]) => {
+            if (total > importeMasGasto) {
+                importeMasGasto = total;
+                diaMasGasto = dia;
+            }
+        });
+        estadisticas.diaMasGasto = diaMasGasto;
+        estadisticas.importeDiaMasGasto = importeMasGasto;
+
+        // Calcular categoría con mayor crecimiento
+        const categoriasActuales = {};
+        gastosActuales.forEach(gasto => {
+            if (gasto.categoria) {
+                if (!categoriasActuales[gasto.categoria]) {
+                    categoriasActuales[gasto.categoria] = 0;
+                }
+                categoriasActuales[gasto.categoria] += parsearImporte(gasto.importe);
+            }
+        });
+
+        const categoriasAnteriores = {};
+        gastosAnteriores.forEach(gasto => {
+            if (gasto.categoria) {
+                if (!categoriasAnteriores[gasto.categoria]) {
+                    categoriasAnteriores[gasto.categoria] = 0;
+                }
+                categoriasAnteriores[gasto.categoria] += parsearImporte(gasto.importe);
+            }
+        });
+
+        let categoriaMayorCrecimiento = '-';
+        let mayorCrecimiento = -Infinity;
+        Object.keys(categoriasActuales).forEach(categoria => {
+            const totalActual = categoriasActuales[categoria];
+            const totalAnterior = categoriasAnteriores[categoria] || 0;
+
+            let crecimiento = 0;
+            if (totalAnterior > 0) {
+                crecimiento = ((totalActual - totalAnterior) / totalAnterior) * 100;
+            } else if (totalActual > 0) {
+                crecimiento = 100;
+            }
+
+            if (crecimiento > mayorCrecimiento) {
+                mayorCrecimiento = crecimiento;
+                categoriaMayorCrecimiento = categoria;
+            }
+        });
+        estadisticas.categoriaMayorCrecimiento = categoriaMayorCrecimiento;
+        estadisticas.porcentajeCrecimiento = mayorCrecimiento;
+
+        // Proyección de gasto del mes
+        const diasEnMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+        estadisticas.proyeccionMes = estadisticas.promedioDiario * diasEnMes;
+
+        // Cargar datos de los últimos 6 meses para el gráfico
+        const evolucion = [];
+        for (let i = 5; i >= 0; i--) {
+            const mesInfo = obtenerNombreMesPorIndex(i);
+            const gastos = await cargarGastosDeMes(mesInfo.nombreHoja);
+            const total = calcularTotalGastos(gastos);
+            evolucion.push({
+                nombreHoja: mesInfo.nombreHoja,
+                mes: mesInfo.mes,
+                año: mesInfo.año,
+                total: total
+            });
+        }
+        estadisticas.evolucion = evolucion;
+
+        return estadisticas;
+    } catch (error) {
+        console.error('Error al calcular estadísticas avanzadas:', error);
+        throw error;
+    }
+}
+
+// Renderizar el gráfico de evolución de 6 meses
+function renderizarGraficoEvolucion(evolucion) {
+    const ctx = document.getElementById('evolutionChart');
+
+    if (!ctx) {
+        console.error('No se encontró el canvas del gráfico');
+        return;
+    }
+
+    // Destruir el gráfico anterior si existe
+    if (evolutionChartInstance) {
+        evolutionChartInstance.destroy();
+    }
+
+    const labels = evolucion.map(mes => `${mes.nombreHoja} ${mes.año}`);
+    const data = evolucion.map(mes => mes.total);
+
+    evolutionChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Gastos (€)',
+                data: data,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                borderWidth: 3,
+                tension: 0.4,
+                fill: true,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                pointBackgroundColor: '#10b981',
+                pointBorderColor: '#161b22',
+                pointBorderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: '#161b22',
+                    titleColor: '#e6edf3',
+                    bodyColor: '#e6edf3',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y.toFixed(2)} €`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#7d8590',
+                        callback: function(value) {
+                            return value.toFixed(0) + ' €';
+                        }
+                    },
+                    grid: {
+                        color: '#30363d',
+                        drawBorder: false
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: '#7d8590'
+                    },
+                    grid: {
+                        color: '#30363d',
+                        drawBorder: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Cargar y renderizar estadísticas avanzadas
+async function cargarEstadisticasAvanzadas() {
+    const loadingAdvancedStats = document.getElementById('loadingAdvancedStats');
+    const advancedStatsContent = document.getElementById('advancedStatsContent');
+
+    if (!loadingAdvancedStats || !advancedStatsContent) {
+        console.warn('No se encontraron los elementos de estadísticas avanzadas');
+        return;
+    }
+
+    loadingAdvancedStats.style.display = 'block';
+    advancedStatsContent.style.display = 'none';
+
+    try {
+        const stats = await calcularEstadisticasAvanzadas();
+
+        // Actualizar comparativa mensual
+        document.getElementById('gastoMesActual').textContent = `${stats.totalMesActual.toFixed(2)} €`;
+        document.getElementById('gastoMesAnterior').textContent = `${stats.totalMesAnterior.toFixed(2)} €`;
+
+        const cambioElement = document.getElementById('cambioMensual');
+        const cambioAbsoluto = Math.abs(stats.cambioMensual);
+        const signo = stats.cambioMensual > 0 ? '+' : '';
+        cambioElement.textContent = `${signo}${stats.cambioMensual.toFixed(1)}%`;
+
+        // Aplicar clase según si es positivo (malo) o negativo (bueno)
+        cambioElement.classList.remove('positive', 'negative', 'neutral');
+        if (stats.cambioMensual > 0) {
+            cambioElement.classList.add('positive');
+        } else if (stats.cambioMensual < 0) {
+            cambioElement.classList.add('negative');
+        } else {
+            cambioElement.classList.add('neutral');
+        }
+
+        // Actualizar promedio diario
+        document.getElementById('promedioDiario').textContent = `${stats.promedioDiario.toFixed(2)} €`;
+        document.getElementById('promedioDiarioSubtitle').textContent = `en ${stats.diasTranscurridos} días`;
+
+        // Actualizar día con más gasto
+        document.getElementById('diaMasGasto').textContent = stats.diaMasGasto;
+        document.getElementById('importeDiaMasGasto').textContent = `${stats.importeDiaMasGasto.toFixed(2)} €`;
+
+        // Actualizar categoría con mayor crecimiento
+        document.getElementById('categoriaCrecimiento').textContent = stats.categoriaMayorCrecimiento;
+        const crecimientoText = stats.porcentajeCrecimiento === -Infinity || stats.porcentajeCrecimiento === 100
+            ? 'Nueva'
+            : `+${stats.porcentajeCrecimiento.toFixed(1)}%`;
+        document.getElementById('porcentajeCrecimiento').textContent = crecimientoText;
+
+        // Actualizar proyección del mes
+        document.getElementById('proyeccionMes').textContent = `${stats.proyeccionMes.toFixed(2)} €`;
+        const diasRestantes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - stats.diasTranscurridos;
+        document.getElementById('proyeccionSubtitle').textContent = `(${diasRestantes} días restantes)`;
+
+        // Renderizar gráfico
+        renderizarGraficoEvolucion(stats.evolucion);
+
+        loadingAdvancedStats.style.display = 'none';
+        advancedStatsContent.style.display = 'block';
+    } catch (error) {
+        console.error('Error al cargar estadísticas avanzadas:', error);
+        loadingAdvancedStats.style.display = 'none';
+        advancedStatsContent.innerHTML = `
+            <div class="error-card">
+                <div class="error-header">
+                    <div class="error-icon">❌</div>
+                    <h3>Error al cargar estadísticas avanzadas</h3>
+                </div>
+                <div class="error-body">
+                    No se pudieron cargar las estadísticas. Verifica que existen hojas para los meses anteriores.
+                </div>
+            </div>
+        `;
+        advancedStatsContent.style.display = 'block';
     }
 }
 
@@ -750,9 +1099,6 @@ function renderizarListaGastos(terminoBusqueda = '') {
                         <button class="btn btn-icon-only btn-edit-expense" data-fila="${gasto.fila}" aria-label="Editar gasto">
                             ✏️
                         </button>
-                        <button class="btn btn-icon-only btn-delete-expense" data-fila="${gasto.fila}" aria-label="Eliminar gasto">
-                            🗑️
-                        </button>
                     </div>
                 </div>
             </div>
@@ -764,14 +1110,6 @@ function renderizarListaGastos(terminoBusqueda = '') {
         btn.addEventListener('click', (e) => {
             const fila = parseInt(e.currentTarget.getAttribute('data-fila'));
             editarGasto(fila);
-        });
-    });
-
-    // Añadir event listeners a los botones de eliminar
-    document.querySelectorAll('.btn-delete-expense').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const fila = parseInt(e.currentTarget.getAttribute('data-fila'));
-            mostrarDialogoEliminar(fila);
         });
     });
 }
@@ -839,156 +1177,6 @@ function editarGasto(fila) {
         importeInput.select();
         console.log('=== FORMULARIO LISTO PARA EDITAR ===');
     }, 150);
-}
-
-// ==================== FUNCIONES DE ELIMINACIÓN ====================
-
-function mostrarDialogoEliminar(fila) {
-    const gasto = gastosCache.find(g => g.fila === fila);
-    if (!gasto) {
-        console.error('No se encontró el gasto con fila:', fila);
-        return;
-    }
-
-    // Guardar el gasto a eliminar
-    gastoAEliminar = gasto;
-
-    // Construir el resumen del gasto
-    const categoriaEmoji = obtenerEmojiCategoria(gasto.categoria);
-    const importe = parsearImporte(gasto.importe);
-
-    deleteExpenseSummary.innerHTML = `
-        <div class="summary-row">
-            <span class="summary-label">Fecha</span>
-            <span class="summary-value">${gasto.fecha}</span>
-        </div>
-        <div class="summary-row">
-            <span class="summary-label">Importe</span>
-            <span class="summary-value">${importe.toFixed(2)} €</span>
-        </div>
-        <div class="summary-row">
-            <span class="summary-label">Categoría</span>
-            <span class="summary-value">${categoriaEmoji} ${gasto.categoria}</span>
-        </div>
-        <div class="summary-row">
-            <span class="summary-label">Descripción</span>
-            <span class="summary-value">${gasto.descripcion}</span>
-        </div>
-    `;
-
-    // Mostrar el diálogo
-    deleteDialog.style.display = 'flex';
-}
-
-function ocultarDialogoEliminar() {
-    deleteDialog.style.display = 'none';
-    gastoAEliminar = null;
-}
-
-function toggleBotonEliminar(eliminando) {
-    btnConfirmDelete.disabled = eliminando;
-    btnCancelDelete.disabled = eliminando;
-
-    const btnText = btnConfirmDelete.querySelector('.btn-text');
-    const btnIcon = btnConfirmDelete.querySelector('.btn-icon');
-    const btnLoader = btnConfirmDelete.querySelector('.btn-loader');
-
-    if (eliminando) {
-        btnText.textContent = 'Eliminando...';
-        btnIcon.style.display = 'none';
-        btnLoader.style.display = 'inline-block';
-    } else {
-        btnText.textContent = 'Eliminar';
-        btnIcon.style.display = 'inline';
-        btnLoader.style.display = 'none';
-    }
-}
-
-async function eliminarGasto() {
-    if (!gastoAEliminar) {
-        console.error('No hay gasto para eliminar');
-        return;
-    }
-
-    toggleBotonEliminar(true);
-
-    try {
-        // Obtener todas las filas después de la fila a eliminar
-        const filaAEliminar = gastoAEliminar.fila;
-
-        console.log(`🗑️ Eliminando fila ${filaAEliminar} de la hoja ${currentSheetName}`);
-
-        // Usar batchUpdate para eliminar la fila
-        const requests = [
-            {
-                deleteDimension: {
-                    range: {
-                        sheetId: currentSheetId,
-                        dimension: 'ROWS',
-                        startIndex: filaAEliminar - 1, // 0-indexed
-                        endIndex: filaAEliminar // Exclusivo
-                    }
-                }
-            }
-        ];
-
-        await gapi.client.sheets.spreadsheets.batchUpdate({
-            spreadsheetId: CONFIG.SPREADSHEET_ID,
-            resource: { requests }
-        });
-
-        console.log('✅ Fila eliminada exitosamente');
-
-        // Eliminar del cache
-        const index = gastosCache.findIndex(g => g.fila === filaAEliminar);
-        if (index !== -1) {
-            gastosCache.splice(index, 1);
-        }
-
-        // Actualizar los números de fila en el cache (todas las filas después de la eliminada se mueven hacia arriba)
-        gastosCache.forEach(gasto => {
-            if (gasto.fila > filaAEliminar) {
-                gasto.fila--;
-            }
-        });
-
-        // Actualizar la vista
-        ocultarDialogoEliminar();
-
-        // Verificar si hay gastos después de eliminar
-        if (gastosCache.length === 0) {
-            expensesList.innerHTML = '';
-            emptyState.style.display = 'block';
-        } else {
-            renderizarListaGastos(searchInput.value.trim());
-        }
-
-        // Actualizar el contador
-        actualizarContadorGastos();
-
-        // Mostrar mensaje de éxito (opcional)
-        console.log('✅ Gasto eliminado correctamente');
-
-        // Limpiar el cache del dashboard para forzar recarga
-        if (contentDashboard.classList.contains('active')) {
-            cargarDashboard();
-        }
-
-    } catch (error) {
-        console.error('❌ Error al eliminar el gasto:', error);
-        let mensajeError = 'Error al eliminar el gasto. ';
-
-        if (error.result && error.result.error) {
-            mensajeError += error.result.error.message;
-        } else {
-            mensajeError += 'Verifica tu conexión y permisos de Google Sheets.';
-        }
-
-        ocultarDialogoEliminar();
-        mostrarErrorMessage(mensajeError);
-    } finally {
-        toggleBotonEliminar(false);
-    }
 }
 
 async function enviarAGoogleSheets(datos, fila = null) {
@@ -1279,22 +1467,6 @@ btnRefreshDashboard.addEventListener('click', () => {
 // Botón "Añadir Gasto" en empty state
 btnGoToAdd.addEventListener('click', () => {
     cambiarTab('add');
-});
-
-// Botones del diálogo de eliminar
-btnCancelDelete.addEventListener('click', () => {
-    ocultarDialogoEliminar();
-});
-
-btnConfirmDelete.addEventListener('click', () => {
-    eliminarGasto();
-});
-
-// Cerrar diálogo al hacer clic fuera de él
-deleteDialog.addEventListener('click', (e) => {
-    if (e.target === deleteDialog) {
-        ocultarDialogoEliminar();
-    }
 });
 
 // Buscador en la lista de gastos

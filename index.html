@@ -24,6 +24,9 @@
     <link rel="manifest" href="manifest.json">
 
     <link rel="stylesheet" href="style.css">
+
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -84,6 +87,101 @@
                     <h2 class="dashboard-section-title">📈 Gastos por Categoría</h2>
                     <div id="categoryStats" class="category-stats">
                         <!-- Se llenará con JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Estadísticas Avanzadas -->
+                <div class="dashboard-section">
+                    <h2 class="dashboard-section-title">🔍 Estadísticas Avanzadas</h2>
+
+                    <!-- Loading state para estadísticas avanzadas -->
+                    <div id="loadingAdvancedStats" class="loading-state" style="display: none;">
+                        <div class="loading-spinner">⏳</div>
+                        <p>Cargando estadísticas...</p>
+                    </div>
+
+                    <!-- Contenido de estadísticas avanzadas -->
+                    <div id="advancedStatsContent" style="display: none;">
+                        <!-- Comparativas y métricas clave -->
+                        <div class="advanced-stats-grid">
+                            <!-- Comparativa mes actual vs anterior -->
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <span class="stat-card-icon">📊</span>
+                                    <span class="stat-card-title">Comparativa Mensual</span>
+                                </div>
+                                <div class="stat-card-body">
+                                    <div class="stat-comparison">
+                                        <div class="stat-row">
+                                            <span class="stat-label">Mes actual:</span>
+                                            <span class="stat-value" id="gastoMesActual">0.00 €</span>
+                                        </div>
+                                        <div class="stat-row">
+                                            <span class="stat-label">Mes anterior:</span>
+                                            <span class="stat-value" id="gastoMesAnterior">0.00 €</span>
+                                        </div>
+                                        <div class="stat-row stat-highlight">
+                                            <span class="stat-label">Cambio:</span>
+                                            <span class="stat-value stat-change" id="cambioMensual">0%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Promedio diario -->
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <span class="stat-card-icon">📅</span>
+                                    <span class="stat-card-title">Promedio Diario</span>
+                                </div>
+                                <div class="stat-card-body">
+                                    <div class="stat-big-number" id="promedioDiario">0.00 €</div>
+                                    <div class="stat-subtitle" id="promedioDiarioSubtitle">del mes</div>
+                                </div>
+                            </div>
+
+                            <!-- Día con más gasto -->
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <span class="stat-card-icon">🔥</span>
+                                    <span class="stat-card-title">Día con Más Gasto</span>
+                                </div>
+                                <div class="stat-card-body">
+                                    <div class="stat-big-number" id="diaMasGasto">-</div>
+                                    <div class="stat-subtitle" id="importeDiaMasGasto">0.00 €</div>
+                                </div>
+                            </div>
+
+                            <!-- Categoría con mayor crecimiento -->
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <span class="stat-card-icon">📈</span>
+                                    <span class="stat-card-title">Mayor Crecimiento</span>
+                                </div>
+                                <div class="stat-card-body">
+                                    <div class="stat-big-number" id="categoriaCrecimiento">-</div>
+                                    <div class="stat-subtitle" id="porcentajeCrecimiento">0%</div>
+                                </div>
+                            </div>
+
+                            <!-- Proyección de gasto -->
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <span class="stat-card-icon">🎯</span>
+                                    <span class="stat-card-title">Proyección del Mes</span>
+                                </div>
+                                <div class="stat-card-body">
+                                    <div class="stat-big-number" id="proyeccionMes">0.00 €</div>
+                                    <div class="stat-subtitle" id="proyeccionSubtitle">estimado</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gráfico de evolución de 6 meses -->
+                        <div class="chart-container">
+                            <h3 class="chart-title">📉 Evolución de Gastos (Últimos 6 Meses)</h3>
+                            <canvas id="evolutionChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -289,31 +387,6 @@
 
             <!-- Lista de gastos -->
             <div id="expensesList" class="expenses-list"></div>
-        </div>
-    </div>
-
-    <!-- Diálogo de confirmación para eliminar -->
-    <div id="deleteDialog" class="dialog-overlay" style="display: none;">
-        <div class="dialog-content">
-            <div class="dialog-header">
-                <div class="dialog-icon">⚠️</div>
-                <h3>Confirmar eliminación</h3>
-            </div>
-            <div class="dialog-body">
-                <p>¿Estás seguro de que quieres eliminar este gasto?</p>
-                <div class="expense-summary-small" id="deleteExpenseSummary"></div>
-                <p class="warning-text">Esta acción no se puede deshacer.</p>
-            </div>
-            <div class="dialog-actions">
-                <button type="button" class="btn btn-secondary" id="btnCancelDelete">
-                    Cancelar
-                </button>
-                <button type="button" class="btn btn-danger" id="btnConfirmDelete">
-                    <span class="btn-icon">🗑️</span>
-                    <span class="btn-text">Eliminar</span>
-                    <span class="btn-loader" style="display: none;">⏳</span>
-                </button>
-            </div>
         </div>
     </div>
 
