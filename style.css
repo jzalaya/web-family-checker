@@ -615,15 +615,18 @@ select:valid {
     position: sticky;
     top: 0;
     z-index: 10;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .tab {
     flex: 1;
-    padding: 14px 12px;
+    min-width: 70px;
+    padding: 12px 8px;
     background: transparent;
     border: none;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--text-secondary);
     position: relative;
@@ -631,7 +634,7 @@ select:valid {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
 }
 
 .tab:hover {
@@ -655,12 +658,13 @@ select:valid {
 }
 
 .tab-icon {
-    font-size: 20px;
+    font-size: 18px;
     line-height: 1;
 }
 
 .tab-label {
-    font-size: 13px;
+    font-size: 11px;
+    white-space: nowrap;
 }
 
 .tab-badge {
@@ -1045,11 +1049,16 @@ select:valid {
     .tab {
         flex-direction: row;
         gap: 8px;
-        padding: 16px 24px;
+        padding: 16px 20px;
+        min-width: auto;
+    }
+
+    .tab-icon {
+        font-size: 20px;
     }
 
     .tab-label {
-        font-size: 15px;
+        font-size: 14px;
     }
 
     .expenses-list {
@@ -1433,11 +1442,280 @@ select:valid {
     border-color: var(--error-color);
 }
 
+/* ==================== ANIMACIONES CSS ==================== */
+
+/* Fade in para cargar gastos */
 @keyframes fadeIn {
     from {
         opacity: 0;
     }
     to {
         opacity: 1;
+    }
+}
+
+/* Slide up al añadir nuevo gasto */
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Animación de checkmark de éxito */
+@keyframes checkmarkDraw {
+    0% {
+        stroke-dashoffset: 100;
+        opacity: 0;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        stroke-dashoffset: 0;
+        opacity: 1;
+    }
+}
+
+@keyframes checkmarkScale {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+/* Skeleton shimmer effect */
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+/* Shake animation para errores de validación */
+@keyframes shake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    10%, 30%, 50%, 70%, 90% {
+        transform: translateX(-8px);
+    }
+    20%, 40%, 60%, 80% {
+        transform: translateX(8px);
+    }
+}
+
+/* Ripple effect */
+@keyframes ripple {
+    0% {
+        transform: scale(0);
+        opacity: 0.6;
+    }
+    100% {
+        transform: scale(2.5);
+        opacity: 0;
+    }
+}
+
+/* Pulse para loading states */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* ==================== CLASES DE ANIMACIÓN ==================== */
+
+/* Fade in con delay opcional */
+.fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+.fade-in-slow {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Slide up para nuevos elementos */
+.slide-up {
+    animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Shake para errores */
+.shake {
+    animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* Ripple effect en botones */
+.btn {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.btn:active::after {
+    width: 300px;
+    height: 300px;
+    transition: width 0s, height 0s;
+}
+
+.btn-ripple::after {
+    animation: ripple 0.6s ease-out;
+}
+
+/* Skeleton loader */
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--card-bg) 0%,
+        var(--card-hover-bg) 50%,
+        var(--card-bg) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--border-radius);
+}
+
+.skeleton-text {
+    height: 16px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+}
+
+.skeleton-title {
+    height: 24px;
+    width: 60%;
+    margin-bottom: 12px;
+    border-radius: 4px;
+}
+
+.skeleton-card {
+    height: 80px;
+    margin-bottom: 12px;
+    border-radius: var(--border-radius);
+}
+
+/* Success checkmark animation */
+.success-checkmark {
+    display: inline-block;
+    animation: checkmarkScale 0.6s ease-in-out;
+}
+
+.success-checkmark svg {
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    animation: checkmarkDraw 0.8s ease-out forwards;
+}
+
+/* Tab transitions */
+.tab-content {
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.tab-content.active {
+    opacity: 1;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Expense card animations */
+.expense-card {
+    animation: slideUp 0.3s ease-out backwards;
+}
+
+.expense-card:nth-child(1) { animation-delay: 0.05s; }
+.expense-card:nth-child(2) { animation-delay: 0.1s; }
+.expense-card:nth-child(3) { animation-delay: 0.15s; }
+.expense-card:nth-child(4) { animation-delay: 0.2s; }
+.expense-card:nth-child(5) { animation-delay: 0.25s; }
+
+/* Loading state animations */
+.loading-state {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.loading-spinner {
+    animation: spin 1s linear infinite, pulse 1.5s ease-in-out infinite;
+}
+
+/* Dashboard cards stagger */
+.dashboard-card {
+    animation: slideUp 0.4s ease-out backwards;
+}
+
+.dashboard-card:nth-child(1) { animation-delay: 0.1s; }
+.dashboard-card:nth-child(2) { animation-delay: 0.2s; }
+.dashboard-card:nth-child(3) { animation-delay: 0.3s; }
+
+/* Category stats stagger */
+.category-stat-item {
+    animation: slideUp 0.3s ease-out backwards;
+}
+
+.category-stat-item:nth-child(1) { animation-delay: 0.05s; }
+.category-stat-item:nth-child(2) { animation-delay: 0.1s; }
+.category-stat-item:nth-child(3) { animation-delay: 0.15s; }
+.category-stat-item:nth-child(4) { animation-delay: 0.2s; }
+.category-stat-item:nth-child(5) { animation-delay: 0.25s; }
+.category-stat-item:nth-child(6) { animation-delay: 0.3s; }
+
+/* Advanced stats cards stagger */
+.stat-card {
+    animation: slideUp 0.4s ease-out backwards;
+}
+
+.stat-card:nth-child(1) { animation-delay: 0.1s; }
+.stat-card:nth-child(2) { animation-delay: 0.15s; }
+.stat-card:nth-child(3) { animation-delay: 0.2s; }
+.stat-card:nth-child(4) { animation-delay: 0.25s; }
+.stat-card:nth-child(5) { animation-delay: 0.3s; }
+
+/* Success and error cards */
+.success-card,
+.error-card {
+    animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Input error state */
+input.input-error,
+select.input-error {
+    border-color: var(--error-color);
+    animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+/* Reduce animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .btn::after {
+        display: none;
     }
 }

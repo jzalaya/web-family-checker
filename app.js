@@ -32,10 +32,15 @@ const charCount = document.getElementById('charCount');
 const tabDashboard = document.getElementById('tabDashboard');
 const tabAdd = document.getElementById('tabAdd');
 const tabList = document.getElementById('tabList');
+const tabStats = document.getElementById('tabStats');
 const contentDashboard = document.getElementById('contentDashboard');
 const contentAdd = document.getElementById('contentAdd');
 const contentList = document.getElementById('contentList');
+const contentStats = document.getElementById('contentStats');
 const expenseCount = document.getElementById('expenseCount');
+
+// Stats view
+const btnRefreshStats = document.getElementById('btnRefreshStats');
 
 // List view
 const expensesList = document.getElementById('expensesList');
@@ -319,6 +324,12 @@ function mostrarSuccessMessage(datos) {
 function mostrarErrorMessage(mensaje) {
     errorBody.textContent = mensaje;
     errorMessage.style.display = 'block';
+
+    // Agregar shake animation al error card
+    errorMessage.classList.add('shake');
+    setTimeout(() => {
+        errorMessage.classList.remove('shake');
+    }, 500);
 }
 
 function toggleBotonEnvio(enviando) {
@@ -427,8 +438,7 @@ async function cargarDashboard() {
         // Cargar estadísticas por categoría
         await cargarEstadisticasCategorias();
 
-        // Cargar estadísticas avanzadas
-        await cargarEstadisticasAvanzadas();
+        // NO cargar estadísticas avanzadas aquí - se cargarán en el tab separado
 
         loadingDashboard.style.display = 'none';
         dashboardContent.style.display = 'block';
@@ -818,8 +828,8 @@ function renderizarGraficoEvolucion(evolucion) {
     });
 }
 
-// Cargar y renderizar estadísticas avanzadas
-async function cargarEstadisticasAvanzadas() {
+// Cargar y renderizar estadísticas avanzadas (solo cuando se abre el tab)
+async function cargarTabEstadisticasAvanzadas() {
     const loadingAdvancedStats = document.getElementById('loadingAdvancedStats');
     const advancedStatsContent = document.getElementById('advancedStatsContent');
 
@@ -919,12 +929,17 @@ function cambiarTab(tabName) {
         tabList.classList.add('active');
         contentList.classList.add('active');
         cargarGastos();
+    } else if (tabName === 'stats') {
+        tabStats.classList.add('active');
+        contentStats.classList.add('active');
+        cargarTabEstadisticasAvanzadas();
     }
 }
 
 tabDashboard.addEventListener('click', () => cambiarTab('dashboard'));
 tabAdd.addEventListener('click', () => cambiarTab('add'));
 tabList.addEventListener('click', () => cambiarTab('list'));
+tabStats.addEventListener('click', () => cambiarTab('stats'));
 
 // ==================== GOOGLE SHEETS API ====================
 
@@ -1500,19 +1515,28 @@ form.addEventListener('submit', async (e) => {
     // Validaciones
     const validacionImporte = validarImporte(importe);
     if (!validacionImporte.valido) {
+        importeInput.classList.add('input-error');
+        setTimeout(() => importeInput.classList.remove('input-error'), 500);
         mostrarErrorMessage(validacionImporte.mensaje);
+        importeInput.focus();
         return;
     }
 
     const validacionCategoria = validarCategoria(categoria);
     if (!validacionCategoria.valido) {
+        categoriaInput.classList.add('input-error');
+        setTimeout(() => categoriaInput.classList.remove('input-error'), 500);
         mostrarErrorMessage(validacionCategoria.mensaje);
+        categoriaInput.focus();
         return;
     }
 
     const validacionDescripcion = validarDescripcion(descripcion);
     if (!validacionDescripcion.valido) {
+        descripcionInput.classList.add('input-error');
+        setTimeout(() => descripcionInput.classList.remove('input-error'), 500);
         mostrarErrorMessage(validacionDescripcion.mensaje);
+        descripcionInput.focus();
         return;
     }
 
@@ -1630,6 +1654,11 @@ btnRefresh.addEventListener('click', () => {
 btnRefreshDashboard.addEventListener('click', () => {
     gastosCache = []; // Limpiar cache para forzar recarga
     cargarDashboard();
+});
+
+// Botón "Actualizar" en estadísticas avanzadas
+btnRefreshStats.addEventListener('click', () => {
+    cargarTabEstadisticasAvanzadas();
 });
 
 // Botón "Añadir Gasto" en empty state
