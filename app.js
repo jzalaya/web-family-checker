@@ -151,11 +151,11 @@ function parsearImporte(importe) {
     return isNaN(valor) ? 0 : valor;
 }
 
-// Función para formatear fecha a DD/MM/YYYY
+// Función para formatear fecha a MM/DD/YYYY (formato de Google Sheets USA)
 function formatearFecha(fechaISO) {
     if (!fechaISO) return getFechaHoy();
     const [año, mes, dia] = fechaISO.split('-');
-    return `${dia}/${mes}/${año}`;
+    return `${mes}/${dia}/${año}`;
 }
 
 // Función para convertir diferentes formatos de fecha a YYYY-MM-DD
@@ -224,13 +224,13 @@ function formatearFechaISO(fechaStr) {
     return resultado;
 }
 
-// Función para formatear la fecha de hoy en DD/MM/YYYY
+// Función para formatear la fecha de hoy en MM/DD/YYYY (formato de Google Sheets USA)
 function getFechaHoy() {
     const hoy = new Date();
     const dia = String(hoy.getDate()).padStart(2, '0');
     const mes = String(hoy.getMonth() + 1).padStart(2, '0');
     const año = hoy.getFullYear();
-    return `${dia}/${mes}/${año}`;
+    return `${mes}/${dia}/${año}`;
 }
 
 // Función para obtener la fecha de hoy en formato ISO (YYYY-MM-DD)
