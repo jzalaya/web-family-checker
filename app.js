@@ -983,31 +983,15 @@ async function initializeGapiClient() {
 function gisLoaded() {
     // Obtener el origin actual para el redirect_uri
     const redirectUri = window.location.origin;
+    console.log('🔗 Redirect URI configurado:', redirectUri);
+    console.log('ℹ️  Asegúrate de que este URI esté en "Orígenes de JavaScript autorizados" y "URIs de redireccionamiento" en Google Cloud Console');
 
-    // Logs de depuración detallados
-    console.log('=== INFORMACIÓN DE DEPURACIÓN OAUTH ===');
-    console.log('🔗 Redirect URI (origin):', redirectUri);
-    console.log('📍 URL completa:', window.location.href);
-    console.log('🆔 Client ID:', CONFIG.CLIENT_ID);
-    console.log('🔍 Tipo de CLIENT_ID:', typeof CONFIG.CLIENT_ID);
-    console.log('📏 Longitud del origin:', redirectUri.length);
-    console.log('🔤 Origin en bytes:', new TextEncoder().encode(redirectUri));
-    console.log('=======================================');
-
-    console.log('ℹ️  Asegúrate de que este URI esté autorizado en Google Cloud Console');
-    console.log('⚠️  El URI debe ser EXACTAMENTE: "' + redirectUri + '" (sin espacios ni barras finales)');
-
-    // Configurar el token client con redirect_uri explícito
-    const tokenClientConfig = {
+    tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.CLIENT_ID,
         scope: 'https://www.googleapis.com/auth/spreadsheets',
         callback: '', // se definirá más tarde
-        redirect_uri: redirectUri, // Configurar explícitamente
-    };
-
-    console.log('📋 Configuración del token client:', JSON.stringify(tokenClientConfig, null, 2));
-
-    tokenClient = google.accounts.oauth2.initTokenClient(tokenClientConfig);
+        redirect_uri: redirectUri,
+    });
     gisInited = true;
     console.log('✅ GIS client inicializado');
     maybeEnableButtons();
@@ -1061,25 +1045,14 @@ function ocultarPantallaLogin() {
 }
 
 function handleAuthClick() {
-    console.log('🔐 Iniciando proceso de autenticación...');
-    console.log('📍 window.location.origin:', window.location.origin);
-    console.log('📍 window.location.href:', window.location.href);
+    console.log('🔐 Iniciando autenticación...');
 
     tokenClient.callback = async (response) => {
-        console.log('📥 Respuesta del servidor OAuth:', response);
-
         if (response.error !== undefined) {
-            console.error('❌ Error de autenticación detectado');
-            console.error('🔴 Código de error:', response.error);
-            console.error('📄 Descripción del error:', response.error_description);
-            console.error('🔍 URI del error:', response.error_uri);
-            console.error('📋 Respuesta completa:', JSON.stringify(response, null, 2));
-
-            console.log('=== DATOS PARA DEPURACIÓN ===');
-            console.log('Client ID usado:', CONFIG.CLIENT_ID);
-            console.log('Redirect URI esperado:', window.location.origin);
-            console.log('============================');
-
+            console.error('❌ Error de autenticación:', response.error);
+            if (response.error_description) {
+                console.error('📄 Descripción:', response.error_description);
+            }
             mostrarErrorMessage('Error al autenticar: ' + response.error + '. Revisa la consola para más detalles.');
             throw response;
         }
@@ -1091,11 +1064,9 @@ function handleAuthClick() {
 
     if (gapi.client.getToken() === null) {
         // Solicitar token de acceso
-        console.log('🔑 Solicitando token de acceso (primera vez - consent)');
         tokenClient.requestAccessToken({prompt: 'consent'});
     } else {
         // Ya hay token, solo solicitar uno nuevo
-        console.log('🔑 Solicitando token de acceso (renovación)');
         tokenClient.requestAccessToken({prompt: ''});
     }
 }
