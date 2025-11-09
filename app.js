@@ -139,13 +139,14 @@ function actualizarIndicadorMes() {
 // ==================== FUNCIONES AUXILIARES ====================
 
 // Función para limpiar y parsear importes (elimina símbolos de moneda y convierte a número)
+// Formato: las comas separan miles, los puntos separan decimales (ej: 1,234.56)
 function parsearImporte(importe) {
     if (!importe) return 0;
-    // Convertir a string y eliminar símbolos de moneda, espacios, y reemplazar comas por puntos
+    // Convertir a string y eliminar símbolos de moneda, espacios y comas (separador de miles)
     const importeLimpio = importe.toString()
         .replace(/[€$£¥]/g, '')  // Eliminar símbolos de moneda
         .replace(/\s/g, '')       // Eliminar espacios
-        .replace(',', '.');       // Reemplazar coma por punto
+        .replace(/,/g, '');       // Eliminar comas (separador de miles)
     const valor = parseFloat(importeLimpio);
     return isNaN(valor) ? 0 : valor;
 }
