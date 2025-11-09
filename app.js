@@ -553,24 +553,20 @@ function renderizarListaGastos(terminoBusqueda = '') {
 
         return `
             <div class="expense-card" data-fila="${gasto.fila}">
-                <div class="expense-card-header">
-                    <div class="expense-card-date">
-                        <span>📅</span>
-                        <span>${gasto.fecha}</span>
+                <div class="expense-card-main">
+                    <div class="expense-card-left">
+                        <div class="expense-card-description">${gasto.descripcion}</div>
+                        <div class="expense-card-meta">
+                            <span class="expense-card-date">📅 ${gasto.fecha}</span>
+                            <span class="expense-card-category-badge">${categoriaEmoji} ${gasto.categoria}</span>
+                        </div>
                     </div>
-                    <div class="expense-card-amount">${importeFormateado} €</div>
-                </div>
-                <div class="expense-card-body">
-                    <div class="expense-card-category">
-                        <span>${categoriaEmoji}</span>
-                        <span>${gasto.categoria}</span>
+                    <div class="expense-card-right">
+                        <div class="expense-card-amount">${importeFormateado} €</div>
+                        <button class="btn btn-icon-only btn-edit-expense" data-fila="${gasto.fila}" aria-label="Editar gasto">
+                            ✏️
+                        </button>
                     </div>
-                    <div class="expense-card-description">${gasto.descripcion}</div>
-                </div>
-                <div class="expense-card-footer">
-                    <button class="btn btn-outline btn-icon-only btn-edit-expense" data-fila="${gasto.fila}">
-                        <span class="btn-icon">✏️</span>
-                    </button>
                 </div>
             </div>
         `;
