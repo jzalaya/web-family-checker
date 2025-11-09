@@ -1167,7 +1167,30 @@ function maybeEnableButtons() {
     if (gapiInited && gisInited) {
         console.log('✅ Ambos clientes inicializados correctamente');
 
-        // Verificar si ya está autenticado
+        // Intentar cargar token guardado de localStorage
+        const savedToken = localStorage.getItem('google_auth_token');
+        if (savedToken) {
+            try {
+                const tokenData = JSON.parse(savedToken);
+                // Verificar si el token ha expirado
+                const now = Date.now();
+                if (tokenData.expiry && now < tokenData.expiry) {
+                    console.log('✅ Token válido encontrado en localStorage');
+                    gapi.client.setToken(tokenData);
+                    isSignedIn = true;
+                    onSignInSuccess();
+                    return;
+                } else {
+                    console.log('⚠️ Token expirado, eliminando de localStorage');
+                    localStorage.removeItem('google_auth_token');
+                }
+            } catch (e) {
+                console.error('❌ Error al parsear token guardado:', e);
+                localStorage.removeItem('google_auth_token');
+            }
+        }
+
+        // Verificar si ya está autenticado (en memoria)
         const token = gapi.client.getToken();
         if (token !== null) {
             isSignedIn = true;
@@ -1223,6 +1246,21 @@ function handleAuthClick() {
             throw response;
         }
         console.log('✅ Autenticación exitosa');
+
+        // Guardar token en localStorage
+        const token = gapi.client.getToken();
+        if (token) {
+            // Calcular tiempo de expiración (por defecto 1 hora)
+            const expiresIn = response.expires_in || 3600;
+            const expiry = Date.now() + (expiresIn * 1000);
+            const tokenWithExpiry = {
+                ...token,
+                expiry: expiry
+            };
+            localStorage.setItem('google_auth_token', JSON.stringify(tokenWithExpiry));
+            console.log('💾 Token guardado en localStorage (expira en', expiresIn, 'segundos)');
+        }
+
         isSignedIn = true;
         ocultarPantallaLogin();
         await onSignInSuccess();
@@ -1242,6 +1280,9 @@ function handleSignoutClick() {
     if (token !== null) {
         google.accounts.oauth2.revoke(token.access_token);
         gapi.client.setToken('');
+        // Limpiar localStorage
+        localStorage.removeItem('google_auth_token');
+        console.log('🗑️ Token eliminado de localStorage');
         isSignedIn = false;
         mostrarPantallaLogin();
     }
