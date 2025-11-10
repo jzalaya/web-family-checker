@@ -1694,6 +1694,118 @@ let isSignedIn = false;
 let gapiInited = false;
 let gisInited = false;
 let tokenClient;
+let tokenRefreshTimer = null; // Timer para renovación automática del token
+
+// Función para programar la renovación automática del token
+function programarRenovacionToken(expiresIn) {
+    // Limpiar timer anterior si existe
+    if (tokenRefreshTimer) {
+        clearTimeout(tokenRefreshTimer);
+    }
+
+    // Programar renovación 5 minutos antes de que expire (o a la mitad del tiempo si es menor)
+    const tiempoAntes = Math.min(5 * 60 * 1000, (expiresIn * 1000) / 2);
+    const tiempoHastaRenovacion = (expiresIn * 1000) - tiempoAntes;
+
+    console.log(`⏰ Renovación programada en ${Math.floor(tiempoHastaRenovacion / 1000 / 60)} minutos`);
+
+    tokenRefreshTimer = setTimeout(() => {
+        console.log('🔄 Renovando token automáticamente...');
+        renovarTokenSilenciosamente();
+    }, tiempoHastaRenovacion);
+}
+
+// Función para renovar el token silenciosamente
+function renovarTokenSilenciosamente() {
+    if (!tokenClient) {
+        console.error('❌ tokenClient no está inicializado');
+        return;
+    }
+
+    // Intentar renovar sin prompt (silenciosamente)
+    tokenClient.callback = async (response) => {
+        if (response.error !== undefined) {
+            console.warn('⚠️ No se pudo renovar el token silenciosamente:', response.error);
+            // Si falla la renovación silenciosa, el usuario tendrá que autenticarse de nuevo
+            // cuando intente usar la app
+            return;
+        }
+
+        console.log('✅ Token renovado automáticamente');
+
+        // Guardar el nuevo token
+        const token = gapi.client.getToken();
+        if (token) {
+            const expiresIn = response.expires_in || 3600;
+            const expiry = Date.now() + (expiresIn * 1000);
+            const tokenWithExpiry = {
+                ...token,
+                expiry: expiry
+            };
+            localStorage.setItem('google_auth_token', JSON.stringify(tokenWithExpiry));
+            console.log('💾 Token renovado guardado en localStorage');
+
+            // Programar la siguiente renovación
+            programarRenovacionToken(expiresIn);
+        }
+    };
+
+    // Solicitar nuevo token sin prompt
+    tokenClient.requestAccessToken({ prompt: '' });
+}
+
+// Wrapper para llamadas a la API que maneja tokens expirados
+async function ejecutarConReintentoDeToken(apiCall) {
+    try {
+        return await apiCall();
+    } catch (error) {
+        // Verificar si el error es por token inválido o expirado
+        if (error.status === 401 || error.status === 403) {
+            console.log('🔄 Token expirado, intentando renovar...');
+
+            // Intentar renovar el token
+            return new Promise((resolve, reject) => {
+                tokenClient.callback = async (response) => {
+                    if (response.error !== undefined) {
+                        console.error('❌ Error al renovar token:', response.error);
+                        // Si falla, forzar re-autenticación
+                        localStorage.removeItem('google_auth_token');
+                        isSignedIn = false;
+                        mostrarPantallaLogin();
+                        reject(new Error('Token expirado. Por favor, inicia sesión de nuevo.'));
+                        return;
+                    }
+
+                    // Guardar el nuevo token
+                    const token = gapi.client.getToken();
+                    if (token) {
+                        const expiresIn = response.expires_in || 3600;
+                        const expiry = Date.now() + (expiresIn * 1000);
+                        const tokenWithExpiry = {
+                            ...token,
+                            expiry: expiry
+                        };
+                        localStorage.setItem('google_auth_token', JSON.stringify(tokenWithExpiry));
+                        programarRenovacionToken(expiresIn);
+                    }
+
+                    // Reintentar la llamada original
+                    try {
+                        const result = await apiCall();
+                        resolve(result);
+                    } catch (retryError) {
+                        reject(retryError);
+                    }
+                };
+
+                tokenClient.requestAccessToken({ prompt: '' });
+            });
+        }
+
+        // Si no es un error de token, re-lanzar el error
+        throw error;
+    }
+}
 
 // Inicializar cliente de Google Identity Services
 function gapiLoaded() {
@@ -1747,6 +1859,12 @@ function maybeEnableButtons() {
                     console.log('✅ Token válido encontrado en localStorage');
                     gapi.client.setToken(tokenData);
                     isSignedIn = true;
+
+                    // Calcular tiempo restante y programar renovación
+                    const tiempoRestante = Math.floor((tokenData.expiry - now) / 1000);
+                    console.log(`⏰ Token expira en ${Math.floor(tiempoRestante / 60)} minutos`);
+                    programarRenovacionToken(tiempoRestante);
+
                     onSignInSuccess();
                     return;
                 } else {
@@ -1828,6 +1946,9 @@ function handleAuthClick() {
             };
             localStorage.setItem('google_auth_token', JSON.stringify(tokenWithExpiry));
             console.log('💾 Token guardado en localStorage (expira en', expiresIn, 'segundos)');
+
+            // Programar renovación automática del token
+            programarRenovacionToken(expiresIn);
         }
 
         isSignedIn = true;
@@ -1852,6 +1973,13 @@ function handleSignoutClick() {
         // Limpiar localStorage
         localStorage.removeItem('google_auth_token');
         console.log('🗑️ Token eliminado de localStorage');
+
+        // Limpiar timer de renovación
+        if (tokenRefreshTimer) {
+            clearTimeout(tokenRefreshTimer);
+            tokenRefreshTimer = null;
+        }
+
         isSignedIn = false;
         mostrarPantallaLogin();
     }
