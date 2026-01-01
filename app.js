@@ -48,6 +48,10 @@ const loadingExpenses = document.getElementById('loadingExpenses');
 const emptyState = document.getElementById('emptyState');
 const searchInput = document.getElementById('searchInput');
 
+// Month selector
+const btnPrevMonth = document.getElementById('btnPrevMonth');
+const btnNextMonth = document.getElementById('btnNextMonth');
+
 // Dashboard view
 const loadingDashboard = document.getElementById('loadingDashboard');
 const dashboardContent = document.getElementById('dashboardContent');
@@ -64,6 +68,8 @@ let gastoEnEdicion = null;
 let gastoAEliminar = null; // Gasto que se está por eliminar
 let currentSheetId = null; // Se obtendrá dinámicamente
 let currentSheetName = ''; // Nombre de la hoja actual (ej: "NOV")
+let selectedMonth = null; // Mes seleccionado (0-11)
+let selectedYear = null; // Año seleccionado
 
 // ==================== FUNCIONES DE HOJAS MENSUALES ====================
 
@@ -107,18 +113,81 @@ async function obtenerSheetIdPorNombre(nombreHoja) {
     }
 }
 
-// Inicializar la hoja del mes actual
+// Cargar mes guardado desde localStorage
+function cargarMesGuardado() {
+    const savedMonth = localStorage.getItem('selectedMonth');
+    const savedYear = localStorage.getItem('selectedYear');
+
+    if (savedMonth !== null && savedYear !== null) {
+        selectedMonth = parseInt(savedMonth);
+        selectedYear = parseInt(savedYear);
+    } else {
+        // Usar mes actual por defecto
+        const hoy = new Date();
+        selectedMonth = hoy.getMonth();
+        selectedYear = hoy.getFullYear();
+    }
+}
+
+// Guardar mes seleccionado en localStorage
+function guardarMesSeleccionado() {
+    localStorage.setItem('selectedMonth', selectedMonth.toString());
+    localStorage.setItem('selectedYear', selectedYear.toString());
+}
+
+// Inicializar la hoja del mes seleccionado
 async function inicializarHojaMesActual() {
-    currentSheetName = obtenerNombreHojaMesActual();
+    // Cargar mes guardado o usar mes actual
+    cargarMesGuardado();
+
+    const meses = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    currentSheetName = meses[selectedMonth];
+
     try {
         currentSheetId = await obtenerSheetIdPorNombre(currentSheetName);
-        console.log(`✅ Usando hoja del mes: ${currentSheetName} (ID: ${currentSheetId})`);
+        console.log(`✅ Usando hoja del mes: ${currentSheetName} (ID: ${currentSheetId}) - ${selectedMonth + 1}/${selectedYear}`);
 
         // Actualizar el indicador visual del mes
         actualizarIndicadorMes();
     } catch (error) {
         console.error(`❌ Error al inicializar hoja del mes ${currentSheetName}:`, error);
-        mostrarErrorMessage(`No se encontró la hoja del mes actual "${currentSheetName}". Verifica que existe en el spreadsheet "Economía Familia".`);
+        mostrarErrorMessage(`No se encontró la hoja del mes "${currentSheetName}". Verifica que existe en el spreadsheet "Economía Familia".`);
+    }
+}
+
+// Cambiar a un mes específico
+async function cambiarMes(mes, año) {
+    selectedMonth = mes;
+    selectedYear = año;
+    guardarMesSeleccionado();
+
+    const meses = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    currentSheetName = meses[selectedMonth];
+
+    try {
+        currentSheetId = await obtenerSheetIdPorNombre(currentSheetName);
+        console.log(`✅ Cambiado a hoja del mes: ${currentSheetName} (ID: ${currentSheetId}) - ${selectedMonth + 1}/${selectedYear}`);
+
+        // Actualizar el indicador visual del mes
+        actualizarIndicadorMes();
+
+        // Recargar datos de la vista actual
+        await recargarDatosVistaActual();
+    } catch (error) {
+        console.error(`❌ Error al cambiar a la hoja del mes ${currentSheetName}:`, error);
+        mostrarErrorMessage(`No se encontró la hoja del mes "${currentSheetName}". Verifica que existe en el spreadsheet "Economía Familia".`);
+    }
+}
+
+// Recargar datos de la vista activa actual
+async function recargarDatosVistaActual() {
+    // Determinar qué tab está activo
+    if (contentDashboard.classList.contains('active')) {
+        await cargarDashboard();
+    } else if (contentList.classList.contains('active')) {
+        await cargarGastos();
+    } else if (contentStats.classList.contains('active')) {
+        await cargarTabEstadisticasAvanzadas();
     }
 }
 
@@ -141,11 +210,36 @@ function actualizarIndicadorMes() {
 
     const monthIndicator = document.getElementById('monthIndicator');
     const nombreMes = mesesNombres[currentSheetName] || currentSheetName;
-    const año = new Date().getFullYear();
 
     if (monthIndicator) {
-        monthIndicator.textContent = `📅 ${nombreMes} ${año}`;
+        monthIndicator.textContent = `📅 ${nombreMes} ${selectedYear}`;
     }
+}
+
+// Navegar al mes anterior
+async function irMesAnterior() {
+    let nuevoMes = selectedMonth - 1;
+    let nuevoAño = selectedYear;
+
+    if (nuevoMes < 0) {
+        nuevoMes = 11;
+        nuevoAño--;
+    }
+
+    await cambiarMes(nuevoMes, nuevoAño);
+}
+
+// Navegar al mes siguiente
+async function irMesSiguiente() {
+    let nuevoMes = selectedMonth + 1;
+    let nuevoAño = selectedYear;
+
+    if (nuevoMes > 11) {
+        nuevoMes = 0;
+        nuevoAño++;
+    }
+
+    await cambiarMes(nuevoMes, nuevoAño);
 }
 
 // ==================== FUNCIONES AUXILIARES ====================
@@ -940,6 +1034,10 @@ tabDashboard.addEventListener('click', () => cambiarTab('dashboard'));
 tabAdd.addEventListener('click', () => cambiarTab('add'));
 tabList.addEventListener('click', () => cambiarTab('list'));
 tabStats.addEventListener('click', () => cambiarTab('stats'));
+
+// Event listeners para navegación de mes
+btnPrevMonth.addEventListener('click', () => irMesAnterior());
+btnNextMonth.addEventListener('click', () => irMesSiguiente());
 
 // ==================== GOOGLE SHEETS API ====================
 

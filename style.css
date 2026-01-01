@@ -85,6 +85,14 @@ header h1 {
     color: var(--text-secondary);
 }
 
+.month-selector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
 .month-indicator {
     font-size: 13px;
     font-weight: 600;
@@ -94,7 +102,34 @@ header h1 {
     display: inline-block;
     padding: 6px 14px;
     border-radius: 6px;
-    margin-top: 8px;
+    margin: 0;
+    min-width: 180px;
+    text-align: center;
+}
+
+.month-nav-btn {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: var(--primary-light);
+    font-size: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.month-nav-btn:hover {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: var(--primary-color);
+    transform: scale(1.05);
+}
+
+.month-nav-btn:active {
+    transform: scale(0.95);
 }
 
 .expense-form {
